@@ -20,6 +20,7 @@ in
           ready_log_line = "Server is ready";
         };
       };
+      env.NATS_URL = lib.mkDefault "nats://localhost:4222";
     }
     (
       _:
@@ -40,6 +41,7 @@ in
               "--encoding=UTF8"
               "--username=${db_user}"
             ];
+            listen_addresses = "0.0.0.0";
           };
         };
         env = {
