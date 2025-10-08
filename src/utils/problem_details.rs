@@ -19,7 +19,7 @@ pub struct ProblemDetails {
     pub instance: Option<String>,
     /// Additional members to extend the problem details
     #[serde(flatten)]
-    pub extensions: serde_json::Map<String, serde_json::Value>,
+    pub errors: serde_json::Map<String, serde_json::Value>,
 }
 
 impl ProblemDetails {
@@ -30,7 +30,7 @@ impl ProblemDetails {
             status,
             detail: None,
             instance: None,
-            extensions: serde_json::Map::new(),
+            errors: serde_json::Map::new(),
         }
     }
 
@@ -45,7 +45,7 @@ impl ProblemDetails {
     }
 
     pub fn with_extension(mut self, key: String, value: serde_json::Value) -> Self {
-        self.extensions.insert(key.to_string(), value);
+        self.errors.insert(key.to_string(), value);
         self
     }
 
