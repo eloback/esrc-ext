@@ -68,8 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up the AdminReplay for handling replay requests
     let replay_store = SqlxDeadLetterStore::new(db_pool.clone());
 
-    let admin_replay =
-        AdminReplay::<SqlxDeadLetterStore, UserProject>::new(replay_store, user_project, context);
+    let admin_replay = AdminReplay::new(replay_store, user_project, context);
 
     // Create Axum router with replay endpoints
     let app = admin_replay.router();
