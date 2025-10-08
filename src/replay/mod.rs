@@ -1,50 +1,55 @@
 use async_nats::{jetstream, HeaderMap, Message, Subject};
-use esrc::{nats::NatsEnvelope, project::Project, version::DeserializeVersion, Event, EventGroup};
+use esrc::{nats::NatsEnvelope, project::Project};
 use nats_dead_letter::DeadLetterStore;
-use std::marker::PhantomData;
+use serde::Serialize;
 
 pub mod http;
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ReplaySummary {
+    pub total_events: usize,
+    pub successful_replays: usize,
+    pub failed_replays: usize,
+    pub processed_aggregates: Vec<uuid::Uuid>,
+    pub errors: Vec<String>,
+}
+
+/// TODO: Improvement, remove the necessity of passing the generics, they should be inferred
 #[derive(Clone)]
-pub struct AdminReplay<DLS, P, G>
+pub struct AdminReplay<DLS, P>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
-    G: EventGroup + Event + DeserializeVersion + Send + Sync + 'static,
 {
     dead_letter_store: DLS,
     project: P,
     context: jetstream::Context,
-    _phantom: PhantomData<G>,
 }
 
-impl<DLS, P, G> AdminReplay<DLS, P, G>
+impl<DLS, P> AdminReplay<DLS, P>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
-    G: EventGroup + Event + DeserializeVersion + Send + Sync + 'static,
 {
     pub fn new(dead_letter_store: DLS, project: P, context: jetstream::Context) -> Self {
         Self {
             dead_letter_store,
             project,
             context,
-            _phantom: PhantomData,
         }
     }
 }
 
-impl<DLS, P, G> AdminReplay<DLS, P, G>
+impl<DLS, P> AdminReplay<DLS, P>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
-    G: EventGroup + Event + DeserializeVersion + Send + Sync + 'static,
 {
     /// Replay all the dead letters events for a given aggregate ID
     async fn replay_one(
-        &mut self,
+        &self,
         aggregate_id: uuid::Uuid,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<ReplaySummary, Box<dyn std::error::Error>> {
         // TODO: Add a method on the nats-dead-letter crate to get by aggregate ID
         // Get all the events from the dead letter store, we'll filter later
         let events = self
@@ -52,7 +57,6 @@ where
             .get_dead_letters(None, None, None, None)
             .await?;
 
-        // FIXME: This must get all the events for a given aggregate ID
         let aggregate_events = events
             .into_iter()
             .filter(|e| e.aggregate_id == Some(aggregate_id))
@@ -65,6 +69,14 @@ where
             )
             .into());
         }
+
+        let mut summary = ReplaySummary {
+            total_events: aggregate_events.len(),
+            successful_replays: 0,
+            failed_replays: 0,
+            processed_aggregates: vec![aggregate_id],
+            errors: Vec::new(),
+        };
 
         for event in aggregate_events {
             let prefix = event.prefix.ok_or("Event prefix is missing")?;
@@ -95,20 +107,35 @@ where
             // From the envelope, convert it to a context
             let context = esrc::project::Context::try_with_envelope(&envelope)?;
 
-            self.project.project(context).await?;
-
-            if let Some(id) = event.id {
-                self.dead_letter_store
-                    .remove_dead_letter(&id.to_string())
-                    .await?;
+            let mut project = self.project.clone();
+            match project.project(context).await {
+                Ok(_) => {
+                    summary.successful_replays += 1;
+                    if let Some(id) = event.id
+                        && let Err(e) = self
+                            .dead_letter_store
+                            .remove_dead_letter(&id.to_string())
+                            .await
+                    {
+                        summary
+                            .errors
+                            .push(format!("Failed to remove dead letter {}: {}", id, e));
+                    }
+                },
+                Err(e) => {
+                    summary.failed_replays += 1;
+                    summary
+                        .errors
+                        .push(format!("Failed to replay event: {}", e));
+                },
             }
         }
 
-        Ok(())
+        Ok(summary)
     }
 
     /// Replay all the dead letters events from all aggregates
-    async fn replay_all(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn replay_all(&self) -> Result<ReplaySummary, Box<dyn std::error::Error>> {
         // Get all the events from the dead letter store
         let events = self
             .dead_letter_store
@@ -126,9 +153,18 @@ where
             }
         }
 
+        let mut summary = ReplaySummary {
+            total_events: 0,
+            successful_replays: 0,
+            failed_replays: 0,
+            processed_aggregates: aggregates_events.keys().cloned().collect(),
+            errors: Vec::new(),
+        };
+
         // Replay events for each aggregate
         for (aggregate_id, events) in aggregates_events {
             println!("Replaying events for aggregate ID: {}", aggregate_id);
+            summary.total_events += events.len();
 
             for event in events {
                 let prefix = event.prefix.ok_or("Event prefix is missing")?;
@@ -159,16 +195,32 @@ where
                 // From the envelope, convert it to a context
                 let context = esrc::project::Context::try_with_envelope(&envelope)?;
 
-                self.project.project(context).await?;
-
-                if let Some(id) = event.id {
-                    self.dead_letter_store
-                        .remove_dead_letter(&id.to_string())
-                        .await?;
+                let mut project = self.project.clone();
+                match project.project(context).await {
+                    Ok(_) => {
+                        summary.successful_replays += 1;
+                        if let Some(id) = event.id
+                            && let Err(e) = self
+                                .dead_letter_store
+                                .remove_dead_letter(&id.to_string())
+                                .await
+                        {
+                            summary
+                                .errors
+                                .push(format!("Failed to remove dead letter {}: {}", id, e));
+                        }
+                    },
+                    Err(e) => {
+                        summary.failed_replays += 1;
+                        summary.errors.push(format!(
+                            "Failed to replay event for aggregate {}: {}",
+                            aggregate_id, e
+                        ));
+                    },
                 }
             }
         }
 
-        todo!()
+        Ok(summary)
     }
 }

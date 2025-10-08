@@ -12,72 +12,60 @@ use crate::utils::problem_details::ProblemDetails;
 
 use super::*;
 
-impl<DLS, P, G> AdminReplay<DLS, P, G>
+impl<DLS, P> AdminReplay<DLS, P>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
-    G: EventGroup + Event + DeserializeVersion + Send + Sync + 'static,
 {
     /// Returns the Axum router configured with replay routes
     pub fn router(self) -> Router {
         let admin_replay = Arc::new(self);
-        let admin_replay_clone = admin_replay.clone();
 
         Router::new()
             .route(
                 "/admin/dead-letters/replay/:event_id",
-                patch(|Path(event_id): Path<Uuid>| async move {
-                    replay_one_handler(admin_replay.clone(), event_id).await
+                patch({
+                    let admin_replay = admin_replay.clone();
+                    move |Path(event_id): Path<Uuid>| async move {
+                        replay_one_handler(admin_replay, event_id).await
+                    }
                 }),
             )
             .route(
                 "/admin/dead-letters/replay-all",
-                post(|| async move { replay_all_handler(admin_replay_clone).await }),
+                post({
+                    let admin_replay = admin_replay.clone();
+                    move || async move { replay_all_handler(admin_replay).await }
+                }),
             )
     }
 }
 
-async fn replay_one_handler<DLS, P, G>(
-    admin_replay: Arc<AdminReplay<DLS, P, G>>,
+async fn replay_one_handler<DLS, P>(
+    admin_replay: Arc<AdminReplay<DLS, P>>,
     event_id: Uuid,
-) -> Result<(), ProblemDetails>
+) -> Result<Json<ReplaySummary>, ProblemDetails>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
-    G: EventGroup + Event + DeserializeVersion + Send + Sync + 'static,
 {
-    let mut admin_replay = admin_replay.clone();
-    let admin_replay = Arc::get_mut(&mut admin_replay).ok_or_else(|| {
-        ProblemDetails::internal_server_error(
-            "Failed to get mutable reference to AdminReplay".to_string(),
-        )
-    })?;
-
-    admin_replay.replay_one(event_id).await.map_err(|e| {
+    let summary = admin_replay.replay_one(event_id).await.map_err(|e| {
         ProblemDetails::internal_server_error(format!("Failed to replay event: {}", e))
     })?;
 
-    Ok(())
+    Ok(Json(summary))
 }
 
-async fn replay_all_handler<DLS, P, G>(
-    admin_replay: Arc<AdminReplay<DLS, P, G>>,
-) -> Result<Json<()>, ProblemDetails>
+async fn replay_all_handler<DLS, P>(
+    admin_replay: Arc<AdminReplay<DLS, P>>,
+) -> Result<Json<ReplaySummary>, ProblemDetails>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
-    G: EventGroup + Event + DeserializeVersion + Send + Sync + 'static,
 {
-    let mut admin_replay = admin_replay.clone();
-    let admin_replay = Arc::get_mut(&mut admin_replay).ok_or_else(|| {
-        ProblemDetails::internal_server_error(
-            "Failed to get mutable reference to AdminReplay".to_string(),
-        )
-    })?;
-
-    admin_replay.replay_all().await.map_err(|e| {
+    let summary = admin_replay.replay_all().await.map_err(|e| {
         ProblemDetails::internal_server_error(format!("Failed to replay all events: {}", e))
     })?;
 
-    Ok(Json(()))
+    Ok(Json(summary))
 }
