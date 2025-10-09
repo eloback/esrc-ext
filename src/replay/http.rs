@@ -23,7 +23,7 @@ where
 
         Router::new()
             .route(
-                "/admin/dead-letters/replay/:event_id",
+                "/admin/dead-letters/replay/{event_id}",
                 patch({
                     let admin_replay = admin_replay.clone();
                     move |Path(event_id): Path<Uuid>| async move {
