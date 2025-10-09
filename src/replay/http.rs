@@ -49,9 +49,7 @@ where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
 {
-    let summary = admin_replay.replay_one(event_id).await.map_err(|e| {
-        ProblemDetails::internal_server_error(format!("Failed to replay event: {}", e))
-    })?;
+    let summary = admin_replay.replay_one(event_id).await?;
 
     Ok(Json(summary))
 }
@@ -63,9 +61,23 @@ where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
 {
-    let summary = admin_replay.replay_all().await.map_err(|e| {
-        ProblemDetails::internal_server_error(format!("Failed to replay all events: {}", e))
-    })?;
+    let summary = admin_replay.replay_all().await?;
 
     Ok(Json(summary))
+}
+
+impl From<AdminReplayError> for ProblemDetails {
+    fn from(error: AdminReplayError) -> Self {
+        match error {
+            AdminReplayError::NotFound => {
+                ProblemDetails::not_found("No dead letter events found".to_string())
+            },
+            AdminReplayError::NatsJetstream(e) => {
+                ProblemDetails::internal_server_error(format!("NATS JetStream error: {}", e))
+            },
+            AdminReplayError::DeadLetterStore(e) => {
+                ProblemDetails::internal_server_error(format!("Dead Letter Store error: {}", e))
+            },
+        }
+    }
 }

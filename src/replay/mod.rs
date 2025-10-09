@@ -40,6 +40,16 @@ where
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum AdminReplayError {
+    #[error("No dead letter events found")]
+    NotFound,
+    #[error(transparent)]
+    NatsJetstream(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    DeadLetterStore(Box<dyn std::error::Error + Send + Sync>),
+}
+
 impl<DLS, P> AdminReplay<DLS, P>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
@@ -49,13 +59,14 @@ where
     async fn replay_one(
         &self,
         aggregate_id: uuid::Uuid,
-    ) -> Result<ReplaySummary, Box<dyn std::error::Error>> {
+    ) -> Result<ReplaySummary, AdminReplayError> {
         // TODO: Add a method on the nats-dead-letter crate to get by aggregate ID
         // Get all the events from the dead letter store, we'll filter later
         let events = self
             .dead_letter_store
             .get_dead_letters(None, None, None, None)
-            .await?;
+            .await
+            .map_err(|e| AdminReplayError::DeadLetterStore(e.into()))?;
 
         let aggregate_events = events
             .into_iter()
@@ -63,11 +74,7 @@ where
             .collect::<Vec<_>>();
 
         if aggregate_events.is_empty() {
-            return Err(format!(
-                "No dead letter events found for aggregate ID {}",
-                aggregate_id
-            )
-            .into());
+            return Err(AdminReplayError::NotFound);
         }
 
         let mut summary = ReplaySummary {
@@ -79,33 +86,57 @@ where
         };
 
         for event in aggregate_events {
-            let prefix = event.prefix.ok_or("Event prefix is missing")?;
-            let subject = Subject::from(event.subject);
+            let prefix = event.prefix.ok_or(AdminReplayError::NatsJetstream(
+                "Event prefix is missing".into(),
+            ))?;
+            let subject = Subject::from(event.subject.clone());
             let mut headers = HeaderMap::new();
-            for (key, value) in event.headers.clone().expect("Headers should be present") {
+            for (key, value) in event
+                .headers
+                .clone()
+                .ok_or(AdminReplayError::NatsJetstream(
+                    "Event headers are missing".into(),
+                ))?
+            {
                 headers.insert(key, value);
             }
+            let reply_subject = Subject::from(format!(
+                "$JS.ACK._._.{}.{}.{}.{}.1.{}.0.replay",
+                event.stream,                           // stream name
+                event.consumer,                         // consumer name
+                event.delivery_count,                   // delivered count
+                event.stream_sequence,                  // stream sequence
+                event.timestamp.unix_timestamp_nanos()  // timestamp in nanoseconds
+            ));
 
             // Create a NATS message from the dead letter event
             let nats_core_message = Message {
-                subject,
-                reply: None,
+                subject: subject.clone(),
+                reply: Some(reply_subject),
                 payload: event.payload.clone().into(),
                 headers: Some(headers),
                 status: None,
                 description: None,
                 length: event.payload.len(),
             };
+
             let jetstream_message = jetstream::Message {
                 message: nats_core_message,
                 context: self.context.clone(),
             };
 
             // Create an escr envelope
-            let envelope = NatsEnvelope::try_from_message(&prefix, jetstream_message)?;
+            let envelope =
+                NatsEnvelope::try_from_message(&prefix, jetstream_message).map_err(|e| {
+                    AdminReplayError::NatsJetstream(
+                        format!("Failed to create envelope: {}", e).into(),
+                    )
+                })?;
 
             // From the envelope, convert it to a context
-            let context = esrc::project::Context::try_with_envelope(&envelope)?;
+            let context = esrc::project::Context::try_with_envelope(&envelope).map_err(|e| {
+                AdminReplayError::NatsJetstream(format!("Failed to create context: {}", e).into())
+            })?;
 
             let mut project = self.project.clone();
             match project.project(context).await {
@@ -135,12 +166,13 @@ where
     }
 
     /// Replay all the dead letters events from all aggregates
-    async fn replay_all(&self) -> Result<ReplaySummary, Box<dyn std::error::Error>> {
+    async fn replay_all(&self) -> Result<ReplaySummary, AdminReplayError> {
         // Get all the events from the dead letter store
         let events = self
             .dead_letter_store
             .get_dead_letters(None, None, None, None)
-            .await?;
+            .await
+            .map_err(|e| AdminReplayError::DeadLetterStore(e.into()))?;
 
         // Filter based on aggregates
         let mut aggregates_events = std::collections::HashMap::new();
@@ -151,6 +183,10 @@ where
                     .or_insert_with(Vec::new)
                     .push(event);
             }
+        }
+
+        if aggregates_events.is_empty() {
+            return Err(AdminReplayError::NotFound);
         }
 
         let mut summary = ReplaySummary {
@@ -167,17 +203,29 @@ where
             summary.total_events += events.len();
 
             for event in events {
-                let prefix = event.prefix.ok_or("Event prefix is missing")?;
+                let prefix = event.prefix.ok_or("Event prefix is missing").map_err(|e| {
+                    AdminReplayError::NatsJetstream(
+                        format!("Event prefix is missing: {}", e).into(),
+                    )
+                })?;
                 let subject = Subject::from(event.subject);
                 let mut headers = HeaderMap::new();
                 for (key, value) in event.headers.clone().expect("Headers should be present") {
                     headers.insert(key, value);
                 }
+                let reply_subject = Subject::from(format!(
+                    "$JS.ACK._._.{}.{}.{}.{}.1.{}.0.replay",
+                    event.stream,                           // stream name
+                    event.consumer,                         // consumer name
+                    event.delivery_count,                   // delivered count
+                    event.stream_sequence,                  // stream sequence
+                    event.timestamp.unix_timestamp_nanos()  // timestamp in nanoseconds
+                ));
 
                 // Create a NATS message from the dead letter event
                 let nats_core_message = Message {
-                    subject,
-                    reply: None,
+                    subject: subject.clone(),
+                    reply: Some(reply_subject),
                     payload: event.payload.clone().into(),
                     headers: Some(headers),
                     status: None,
@@ -190,10 +238,20 @@ where
                 };
 
                 // Create an escr envelope
-                let envelope = NatsEnvelope::try_from_message(&prefix, jetstream_message)?;
+                let envelope =
+                    NatsEnvelope::try_from_message(&prefix, jetstream_message).map_err(|e| {
+                        AdminReplayError::NatsJetstream(
+                            format!("Failed to create envelope: {}", e).into(),
+                        )
+                    })?;
 
                 // From the envelope, convert it to a context
-                let context = esrc::project::Context::try_with_envelope(&envelope)?;
+                let context =
+                    esrc::project::Context::try_with_envelope(&envelope).map_err(|e| {
+                        AdminReplayError::NatsJetstream(
+                            format!("Failed to create context: {}", e).into(),
+                        )
+                    })?;
 
                 let mut project = self.project.clone();
                 match project.project(context).await {
