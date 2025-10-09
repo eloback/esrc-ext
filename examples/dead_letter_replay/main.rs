@@ -1,9 +1,9 @@
 use async_nats::jetstream::{self};
-use escr_ext::{feature::Feature, replay::AdminReplay};
 use esrc::{
     aggregate::Root,
     event::{PublishExt, ReplayOneExt},
 };
+use esrc_ext::{feature::Feature, replay::AdminReplay};
 use nats_dead_letter::postgres::SqlxDeadLetterStore;
 use sqlx::postgres::PgPoolOptions;
 
@@ -107,7 +107,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         name: "John Doe".to_string(),
         email: "john.doe@example.com".to_string(),
     };
-    event_store.try_write(root, create_user_command).await?;
+    event_store
+        .try_write(root, create_user_command, None)
+        .await?;
 
     // This command will fail and be sent to the dead letter queue
     tokio::spawn(async move {
@@ -119,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             name: "comercial".to_string(),
             email: "comercial@example.com".to_string(),
         };
-        match event_store.try_write(root, create_user_command).await {
+        match event_store.try_write(root, create_user_command, None).await {
             Ok(_) => tracing::info!("User created successfully"),
             Err(e) => tracing::error!("Failed to create user: {}", e),
         }
