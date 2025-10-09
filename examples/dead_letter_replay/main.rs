@@ -15,12 +15,16 @@ pub mod read_models;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+
     tracing::info!("Starting application server");
 
     // Database setup
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db_pool = PgPoolOptions::new()
-        .max_connections(10)
+        .max_connections(100)
         .connect(&database_url)
         .await?;
 
@@ -28,25 +32,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let nats_url = std::env::var("NATS_URL").expect("NATS_URL must be set");
     let client = async_nats::connect(&nats_url).await?;
     let context = jetstream::new(client.clone());
-
-    // Initialize NatsStore for dead letter management
-    let admin_store = nats_dead_letter::NatsStore::try_new(context.clone(), "dead_letter").await?;
-    let dead_letter_store = SqlxDeadLetterStore::new(db_pool.clone());
-
-    println!("Dead letter automation started");
-    dead_letter_store.migrate().await?;
-    {
-        let store = admin_store.clone();
-
-        // Start dead letter automation to handle failed messages
-        store.get_task_tracker().spawn(async move {
-            // Start dead letter automation for a specific stream and consumer
-            store
-                .run_dead_letter_automation(dead_letter_store)
-                .await
-                .expect("dead letter automation should be able to start");
-        });
-    }
 
     // Initialize the features and event store for your actual application
     let mut event_store = esrc::nats::NatsStore::try_new(context.clone(), "users")
@@ -65,6 +50,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user_project = UserProject::new(db_pool.clone()).await;
     feature.start_automation(user_project.clone(), "user_creation");
 
+    // Initialize NatsStore for dead letter management
+    let admin_store = nats_dead_letter::NatsStore::try_new(context.clone(), "dead_letter").await?;
+    let dead_letter_store = SqlxDeadLetterStore::new(db_pool.clone());
+
+    tracing::info!("Dead letter automation started");
+    dead_letter_store.migrate().await?;
+    {
+        let store = admin_store.clone();
+
+        // Start dead letter automation to handle failed messages
+        store.get_task_tracker().spawn(async move {
+            // Start dead letter automation for a specific stream and consumer
+            store
+                .run_dead_letter_automation(dead_letter_store)
+                .await
+                .expect("dead letter automation should be able to start");
+        });
+    }
+
     // Set up the AdminReplay for handling replay requests
     let replay_store = SqlxDeadLetterStore::new(db_pool.clone());
 
@@ -75,14 +79,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start the HTTP server for replay management
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
-    println!("Replay API server started on http://0.0.0.0:3001");
+    tracing::info!("Replay API server started on http://0.0.0.0:3001");
 
     // Available endpoints:
     // PATCH /admin/dead-letters/replay/:event_id - Replay a specific event by its aggregate ID
     // POST /admin/dead-letters/replay-all - Replay all dead letter events
-    println!("Available endpoints:");
-    println!("  PATCH http://localhost:3001/admin/dead-letters/replay/<aggregate-id>");
-    println!("  POST  http://localhost:3001/admin/dead-letters/replay-all");
+    tracing::info!("Available endpoints:");
+    tracing::info!("  PATCH http://localhost:3001/admin/dead-letters/replay/<aggregate-id>");
+    tracing::info!("  POST  http://localhost:3001/admin/dead-letters/replay-all");
 
     // Spawn the server in a background task
     let server_handle = tokio::spawn(async move {
@@ -92,8 +96,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Keep the application running
-    println!("\nApplication is running. Press Ctrl+C to stop.");
-    println!("You can use the replay endpoints to manage dead letter events.\n");
+    tracing::info!("\nApplication is running. Press Ctrl+C to stop.");
+    tracing::info!("You can use the replay endpoints to manage dead letter events.\n");
 
     // Execute commands for example purposes - This will create correctly
     let user_id = uuid::Uuid::now_v7();
@@ -116,8 +120,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             email: "comercial@example.com".to_string(),
         };
         match event_store.try_write(root, create_user_command).await {
-            Ok(_) => println!("User created successfully"),
-            Err(e) => println!("Failed to create user: {}", e),
+            Ok(_) => tracing::info!("User created successfully"),
+            Err(e) => tracing::error!("Failed to create user: {}", e),
         }
     });
 
@@ -132,9 +136,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Wait for all automations to exit gracefully
-    println!("Waiting for graceful shutdown...");
+    tracing::warn!("Waiting for graceful shutdown...");
     admin_store.wait_graceful_shutdown().await;
 
-    println!("Application shut down successfully");
+    tracing::warn!("Application shut down successfully");
     Ok(())
 }
