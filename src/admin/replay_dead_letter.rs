@@ -3,8 +3,6 @@ use esrc::{nats::NatsEnvelope, project::Project};
 use nats_dead_letter::DeadLetterStore;
 use serde::Serialize;
 
-pub mod http;
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ReplaySummary {
     pub total_events: usize,
@@ -15,7 +13,7 @@ pub struct ReplaySummary {
 }
 
 #[derive(Clone)]
-pub struct AdminReplay<DLS, P>
+pub struct ReplayDeadLetter<DLS, P>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
@@ -25,7 +23,7 @@ where
     context: jetstream::Context,
 }
 
-impl<DLS, P> AdminReplay<DLS, P>
+impl<DLS, P> ReplayDeadLetter<DLS, P>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
@@ -40,7 +38,7 @@ where
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum AdminReplayError {
+pub enum ReplayDeadLetterError {
     #[error("No dead letter events found")]
     NotFound,
     #[error(transparent)]
@@ -49,23 +47,23 @@ pub enum AdminReplayError {
     DeadLetterStore(Box<dyn std::error::Error + Send + Sync>),
 }
 
-impl<DLS, P> AdminReplay<DLS, P>
+impl<DLS, P> ReplayDeadLetter<DLS, P>
 where
     DLS: DeadLetterStore + Send + Sync + 'static,
     P: Project + Send + Sync + 'static,
 {
     /// Replay all the dead letters events for a given aggregate ID
-    async fn replay_one(
+    pub async fn replay_one(
         &self,
         aggregate_id: uuid::Uuid,
-    ) -> Result<ReplaySummary, AdminReplayError> {
+    ) -> Result<ReplaySummary, ReplayDeadLetterError> {
         // TODO: Add a method on the nats-dead-letter crate to get by aggregate ID
         // Get all the events from the dead letter store, we'll filter later
         let events = self
             .dead_letter_store
             .get_dead_letters(None, None, None, None)
             .await
-            .map_err(|e| AdminReplayError::DeadLetterStore(e.into()))?;
+            .map_err(|e| ReplayDeadLetterError::DeadLetterStore(e.into()))?;
 
         let aggregate_events = events
             .into_iter()
@@ -73,7 +71,7 @@ where
             .collect::<Vec<_>>();
 
         if aggregate_events.is_empty() {
-            return Err(AdminReplayError::NotFound);
+            return Err(ReplayDeadLetterError::NotFound);
         }
 
         let mut summary = ReplaySummary {
@@ -85,17 +83,18 @@ where
         };
 
         for event in aggregate_events {
-            let prefix = event.prefix.ok_or(AdminReplayError::NatsJetstream(
+            let prefix = event.prefix.ok_or(ReplayDeadLetterError::NatsJetstream(
                 "Event prefix is missing".into(),
             ))?;
             let subject = Subject::from(event.subject.clone());
             let mut headers = HeaderMap::new();
-            for (key, value) in event
-                .headers
-                .clone()
-                .ok_or(AdminReplayError::NatsJetstream(
-                    "Event headers are missing".into(),
-                ))?
+            for (key, value) in
+                event
+                    .headers
+                    .clone()
+                    .ok_or(ReplayDeadLetterError::NatsJetstream(
+                        "Event headers are missing".into(),
+                    ))?
             {
                 headers.insert(key, value);
             }
@@ -127,14 +126,16 @@ where
             // Create an escr envelope
             let envelope =
                 NatsEnvelope::try_from_message(&prefix, jetstream_message).map_err(|e| {
-                    AdminReplayError::NatsJetstream(
+                    ReplayDeadLetterError::NatsJetstream(
                         format!("Failed to create envelope: {}", e).into(),
                     )
                 })?;
 
             // From the envelope, convert it to a context
             let context = esrc::project::Context::try_with_envelope(&envelope).map_err(|e| {
-                AdminReplayError::NatsJetstream(format!("Failed to create context: {}", e).into())
+                ReplayDeadLetterError::NatsJetstream(
+                    format!("Failed to create context: {}", e).into(),
+                )
             })?;
 
             let mut project = self.project.clone();
@@ -165,13 +166,13 @@ where
     }
 
     /// Replay all the dead letters events from all aggregates
-    async fn replay_all(&self) -> Result<ReplaySummary, AdminReplayError> {
+    pub async fn replay_all(&self) -> Result<ReplaySummary, ReplayDeadLetterError> {
         // Get all the events from the dead letter store
         let events = self
             .dead_letter_store
             .get_dead_letters(None, None, None, None)
             .await
-            .map_err(|e| AdminReplayError::DeadLetterStore(e.into()))?;
+            .map_err(|e| ReplayDeadLetterError::DeadLetterStore(e.into()))?;
 
         // Filter based on aggregates
         let mut aggregates_events = std::collections::HashMap::new();
@@ -185,7 +186,7 @@ where
         }
 
         if aggregates_events.is_empty() {
-            return Err(AdminReplayError::NotFound);
+            return Err(ReplayDeadLetterError::NotFound);
         }
 
         let mut summary = ReplaySummary {
@@ -203,7 +204,7 @@ where
 
             for event in events {
                 let prefix = event.prefix.ok_or("Event prefix is missing").map_err(|e| {
-                    AdminReplayError::NatsJetstream(
+                    ReplayDeadLetterError::NatsJetstream(
                         format!("Event prefix is missing: {}", e).into(),
                     )
                 })?;
@@ -239,7 +240,7 @@ where
                 // Create an escr envelope
                 let envelope =
                     NatsEnvelope::try_from_message(&prefix, jetstream_message).map_err(|e| {
-                        AdminReplayError::NatsJetstream(
+                        ReplayDeadLetterError::NatsJetstream(
                             format!("Failed to create envelope: {}", e).into(),
                         )
                     })?;
@@ -247,7 +248,7 @@ where
                 // From the envelope, convert it to a context
                 let context =
                     esrc::project::Context::try_with_envelope(&envelope).map_err(|e| {
-                        AdminReplayError::NatsJetstream(
+                        ReplayDeadLetterError::NatsJetstream(
                             format!("Failed to create context: {}", e).into(),
                         )
                     })?;
