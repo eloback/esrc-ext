@@ -1,9 +1,16 @@
 use async_nats::jetstream::{self};
+use discern::registry;
 use esrc::{
     aggregate::Root,
     event::{PublishExt, ReplayOneExt},
 };
-use esrc_ext::{feature::Feature, replay::AdminReplay};
+use esrc_ext::{
+    admin::{
+        http::{AdminAppState, HasAdminAppState},
+        AdminHandler,
+    },
+    feature::Feature,
+};
 use nats_dead_letter::postgres::SqlxDeadLetterStore;
 use sqlx::postgres::PgPoolOptions;
 
@@ -13,6 +20,17 @@ pub mod domain;
 pub mod features;
 pub mod read_models;
 
+#[derive(Clone)]
+pub struct AppState {
+    admin_app_state: AdminAppState,
+}
+
+impl HasAdminAppState for AppState {
+    fn admin_state(&self) -> &AdminAppState {
+        &self.admin_app_state
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
@@ -21,6 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Starting application server");
 
+    // * INFRA SETUP
     // Database setup
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db_pool = PgPoolOptions::new()
@@ -44,8 +63,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         });
 
+    let mut router = axum::Router::new();
+
+    // * Dependencies
+    // Create CommandBus and attach handlers
+    let mut admin_command_registry = registry::CommandHandlerRegistry::new();
     let feature = Feature::new(&event_store);
 
+    // * Features
     // User feature setup
     let user_project = UserProject::new(db_pool.clone()).await;
     feature.start_automation(user_project.clone(), "user_creation");
@@ -69,14 +94,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    // Set up the AdminReplay for handling replay requests
+    // Set up the AdminHandler for managing admin commands
     let replay_store = SqlxDeadLetterStore::new(db_pool.clone());
 
-    let admin_replay = AdminReplay::new(replay_store, user_project, context);
+    let admin_handler = AdminHandler::new(replay_store, user_project, context);
+    admin_command_registry.register(admin_handler.clone());
+    admin_handler.setup_router(&mut router);
 
-    // Create Axum router with replay endpoints
-    let app = admin_replay.router();
+    let admin_command_bus = discern::command::CommandBus::new(admin_command_registry);
 
+    let app_state = AppState {
+        admin_app_state: AdminAppState {
+            command_bus: admin_command_bus,
+        },
+    };
+
+    // * Start Application
     // Start the HTTP server for replay management
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
     tracing::info!("Replay API server started on http://0.0.0.0:3001");
@@ -90,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Spawn the server in a background task
     let server_handle = tokio::spawn(async move {
-        axum::serve(listener, app)
+        axum::serve(listener, router.with_state(app_state))
             .await
             .expect("Server should start successfully");
     });
