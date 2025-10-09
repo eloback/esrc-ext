@@ -14,7 +14,6 @@ pub struct ReplaySummary {
     pub errors: Vec<String>,
 }
 
-/// TODO: Improvement, remove the necessity of passing the generics, they should be inferred
 #[derive(Clone)]
 pub struct AdminReplay<DLS, P>
 where
