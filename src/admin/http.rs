@@ -41,17 +41,19 @@ where
     P: Project + Send + Sync + 'static,
 {
     /// Define all the common admin routes
-    pub fn setup_router<S>(self, router: &mut Router<S>)
+    pub fn setup_router<S>(self, router: &mut Router<S>, endpoint: &str)
     where
         S: HasAdminAppState + Clone + Send + Sync + 'static,
     {
+        let admin_path = format!("{}/admin", endpoint.trim_end_matches("/"));
+
         let new_router = std::mem::take(router)
             .route(
-                "/admin/dead-letters/replay/{event_id}",
+                &format!("{}/dead-letters/replay/{{aggregate_id}}", admin_path),
                 patch(replay_one_handler::<S>),
             )
             .route(
-                "/admin/dead-letters/replay-all",
+                &format!("{}/dead-letters/replay-all", admin_path),
                 post(replay_all_handler::<S>),
             );
 
