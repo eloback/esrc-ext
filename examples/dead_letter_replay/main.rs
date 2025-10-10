@@ -99,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let admin_handler = AdminHandler::new(replay_store, user_project, context);
     admin_command_registry.register(admin_handler.clone());
-    admin_handler.setup_router(&mut router);
+    admin_handler.setup_router(&mut router, "/api/v1");
 
     let admin_command_bus = discern::command::CommandBus::new(admin_command_registry);
 
@@ -118,8 +118,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // PATCH /admin/dead-letters/replay/:event_id - Replay a specific event by its aggregate ID
     // POST /admin/dead-letters/replay-all - Replay all dead letter events
     tracing::info!("Available endpoints:");
-    tracing::info!("  PATCH http://localhost:3001/admin/dead-letters/replay/<aggregate-id>");
-    tracing::info!("  POST  http://localhost:3001/admin/dead-letters/replay-all");
+    tracing::info!("  PATCH http://localhost:3001/api/v1/admin/dead-letters/replay/<aggregate-id>");
+    tracing::info!("  POST  http://localhost:3001/api/v1/admin/dead-letters/replay-all");
 
     // Spawn the server in a background task
     let server_handle = tokio::spawn(async move {
