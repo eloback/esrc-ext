@@ -25,6 +25,10 @@ impl<V: View> PgViewProjector<V> {
         }
     }
 
+    pub fn pool(&self) -> &sqlx::PgPool {
+        &self.db
+    }
+
     pub async fn setup(self) -> Result<()> {
         sqlx::query(&format!(
             "CREATE TABLE IF NOT EXISTS {}(
