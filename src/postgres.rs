@@ -66,7 +66,7 @@ impl<V: View> PgViewProjector<V> {
                 "INSERT INTO {} (view_id, payload) values ($1, $2) ON CONFLICT (view_id) DO UPDATE SET payload = EXCLUDED.payload", self.name
             ))
             .bind(id)
-            .bind(serde_json::to_value(view).expect("view should be serializable"))
+            .bind(serde_json::to_value(view)?)
             .execute(&self.db)
             .await?;
         Ok(())
@@ -136,7 +136,7 @@ impl<V: View + Sync + Send> Project for PgViewProjector<V> {
             tracing::debug!("view not changed, skipping save");
             return Ok(());
         }
-        self.save(*id, &rm).await.unwrap();
+        self.save(*id, &rm).await?;
         Ok(())
     }
 }
