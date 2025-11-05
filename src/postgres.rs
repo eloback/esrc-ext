@@ -43,22 +43,18 @@ impl<V: View> PgViewProjector<V> {
         Ok(())
     }
 
-    pub async fn load(&self, id: Uuid) -> Result<V> {
-        let row = sqlx::query(&format!(
+    pub async fn load(&self, id: Uuid) -> Result<Option<V>> {
+        sqlx::query(&format!(
             "select payload from {} where view_id = $1",
             self.name
         ))
         .bind(id)
         .fetch_optional(&self.db)
-        .await?;
-        Ok({
-            if let Some(row) = row {
-                let data = row.get::<Value, _>("payload");
-                serde_json::from_value(data).expect("Failed to deserialize payload")
-            } else {
-                V::default()
-            }
-        })
+        .await?
+        .map(|e| e.get::<Value, _>("payload"))
+        .map(|e| serde_json::from_value(e))
+        .transpose()
+        .map_err(PgViewProjectorError::from)
     }
 
     pub async fn save(&self, id: Uuid, view: &V) -> Result<()> {
@@ -130,7 +126,7 @@ impl<V: View + Sync + Send> Project for PgViewProjector<V> {
     ) -> Result<()> {
         let id = &Context::id(&context);
         tracing::Span::current().record("view_id", id.to_string());
-        let mut rm: V = self.load(*id).await.unwrap();
+        let mut rm: V = self.load(*id).await?.unwrap_or_default();
         let changed = rm.apply(context);
         if !changed {
             tracing::debug!("view not changed, skipping save");
