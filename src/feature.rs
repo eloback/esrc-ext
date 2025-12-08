@@ -3,6 +3,8 @@ use esrc::{
     nats::NatsStore,
 };
 
+use crate::translation::ExternalStore;
+
 pub struct Feature<'a> {
     store: &'a NatsStore,
 }
@@ -27,18 +29,18 @@ impl<'a> Feature<'a> {
 
     pub fn start_translation<A>(
         &self,
-        external_store: &NatsStore,
+        external_store: &ExternalStore,
         project: A,
         feature_name: &'static str,
     ) where
-        A: esrc::project::Project + 'static,
+        A: crate::translation::TranslationProject + 'static,
     {
         let store = external_store.clone();
         store.get_task_tracker().spawn(async move {
             store
-                .start_automation(project, feature_name)
+                .run_project(project, feature_name)
                 .await
-                .expect("automation should be able to start");
+                .expect("translation should be able to start");
         });
     }
 
