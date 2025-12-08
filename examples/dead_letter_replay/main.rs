@@ -9,7 +9,7 @@ use esrc_ext::{
         http::{AdminAppState, HasAdminAppState},
         AdminHandler,
     },
-    feature::Feature,
+    slice_runner::SliceRunner,
 };
 use nats_dead_letter::postgres::SqlxDeadLetterStore;
 use sqlx::postgres::PgPoolOptions;
@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // * Dependencies
     // Create CommandBus and attach handlers
     let mut admin_command_registry = registry::CommandHandlerRegistry::new();
-    let feature = Feature::new(&event_store);
+    let feature = SliceRunner::new(&event_store, None);
 
     // * Features
     // User feature setup

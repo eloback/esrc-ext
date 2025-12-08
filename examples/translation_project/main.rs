@@ -1,5 +1,5 @@
 use async_nats::jetstream::{self};
-use esrc_ext::feature::Translation;
+use esrc_ext::slice_runner::SliceRunner;
 
 pub mod translations;
 
@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // * Dependencies
     // Create CommandBus and attach handlers
-    let translation = Translation::new(&external_store);
+    let translation = SliceRunner::new(&event_store, Some(&external_store));
 
     // * Translations Project
     // User translation setup
