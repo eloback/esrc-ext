@@ -15,6 +15,7 @@ esrc = { git = "https://github.com/eloback/esrc.git", version = "0.2.0", feature
     "derive",
 ] }
 nats-dead-letter = { git = "https://github.com/eloback/nats-dead-letter.git", version = "0.1.0" }
+opentelemetry-nats = { path = "./crates/opentelemetry-nats" }
 axum = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "1.0", features = ["v7", "serde"] }
