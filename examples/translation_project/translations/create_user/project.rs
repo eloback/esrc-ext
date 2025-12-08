@@ -49,4 +49,11 @@ where
 
         Ok(())
     }
+
+    fn consumer_config(&self) -> async_nats::jetstream::consumer::pull::Config {
+        async_nats::jetstream::consumer::pull::Config {
+            deliver_policy: async_nats::jetstream::consumer::DeliverPolicy::All,
+            ..Default::default()
+        }
+    }
 }

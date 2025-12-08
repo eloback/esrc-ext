@@ -28,4 +28,13 @@ impl TranslationProject for UserProject {
 
         Ok(())
     }
+
+    fn consumer_config(&self) -> async_nats::jetstream::consumer::pull::Config {
+        async_nats::jetstream::consumer::pull::Config {
+            durable_name: Some("webhook_create_user".to_string()),
+            filter_subjects: vec!["external.webhook_create_user".to_string()],
+            deliver_policy: async_nats::jetstream::consumer::DeliverPolicy::All,
+            ..Default::default()
+        }
+    }
 }

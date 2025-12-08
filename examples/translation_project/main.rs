@@ -30,22 +30,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
     // External Store
-    let consumer = async_nats::jetstream::consumer::pull::Config {
-        deliver_policy: async_nats::jetstream::consumer::DeliverPolicy::All,
-        ..Default::default()
-    };
-
     let external_stream = async_nats::jetstream::stream::Config {
         name: "external".to_string(),
-        subjects: vec!["external.create_user".to_string()],
+        subjects: vec!["external.>".to_string()],
         retention: async_nats::jetstream::stream::RetentionPolicy::WorkQueue,
         allow_direct: true,
         ..Default::default()
     };
 
     let external_store =
-        esrc_ext::translation::ExternalStore::try_new(context.clone(), &external_stream, &consumer)
-            .await?;
+        esrc_ext::translation::ExternalStore::try_new(context.clone(), &external_stream).await?;
 
     // * Dependencies
     // Create CommandBus and attach handlers
@@ -54,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // * Translations Project
     // User translation setup
     let user_project = translations::create_user::UserProject::new(event_store.clone()).await;
-    translation.start_translation(user_project.clone(), "create_user");
+    translation.start_translation(user_project.clone());
 
     // * Start Application
     // Spawn a task to handle CTRL+C for graceful shutdown

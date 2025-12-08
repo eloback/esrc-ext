@@ -29,22 +29,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
     // External Store
-    let consumer = async_nats::jetstream::consumer::pull::Config {
-        deliver_policy: async_nats::jetstream::consumer::DeliverPolicy::All,
-        ..Default::default()
-    };
-
     let external_stream = async_nats::jetstream::stream::Config {
         name: "external".to_string(),
-        subjects: vec!["external.webhook_create_user".to_string()],
+        subjects: vec!["external.>".to_string()],
         retention: async_nats::jetstream::stream::RetentionPolicy::WorkQueue,
         allow_direct: true,
         ..Default::default()
     };
 
     let external_store =
-        esrc_ext::translation::ExternalStore::try_new(context.clone(), &external_stream, &consumer)
-            .await?;
+        esrc_ext::translation::ExternalStore::try_new(context.clone(), &external_stream).await?;
 
     let mut router = axum::Router::new();
 
@@ -56,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         // User translation setup
         let user_project = features::create_user::setup(&mut router);
-        translation.start_translation(user_project.clone(), "create_user");
+        translation.start_translation(user_project);
     }
 
     // * Start Application
