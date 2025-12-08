@@ -30,6 +30,11 @@ sqlx = { version = "0.8", features = [
     "chrono",
 ] }
 discern = "0.1.0"
+tokio-util = { version = "0.7", features = ["rt"] }
+tokio = { version = "1.0", features = ["rt"] }
+stream-cancel = "0.8"
+trait-variant = "0.1"
+futures = "0.3.31"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

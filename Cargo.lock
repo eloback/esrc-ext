@@ -505,7 +505,7 @@ dependencies = [
  "async-nats",
  "esrc-derive",
  "futures",
- "opentelemetry-nats",
+ "opentelemetry-nats 0.2.1 (git+https://github.com/eloback/esrc.git)",
  "serde",
  "serde_json",
  "stream-cancel",
@@ -538,14 +538,19 @@ dependencies = [
  "axum",
  "discern",
  "esrc",
+ "futures",
  "nats-dead-letter",
+ "opentelemetry-nats 0.2.1",
  "serde",
  "serde_json",
  "sqlx",
+ "stream-cancel",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "trait-variant",
  "url",
  "uuid",
 ]
@@ -1350,6 +1355,17 @@ dependencies = [
  "once_cell",
  "pin-project-lite",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "opentelemetry-nats"
+version = "0.2.1"
+dependencies = [
+ "async-nats",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "tracing",
+ "tracing-opentelemetry",
 ]
 
 [[package]]
