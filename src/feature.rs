@@ -75,14 +75,14 @@ impl<'a> Translation<'a> {
         Translation { store }
     }
 
-    pub fn start_translation<A>(&self, project: A, feature_name: &'static str)
+    pub fn start_translation<A>(&self, project: A)
     where
         A: crate::translation::TranslationProject + 'static,
     {
         let store = self.store.clone();
         store.get_task_tracker().spawn(async move {
             store
-                .run_project(project, feature_name)
+                .run_project(project)
                 .await
                 .expect("translation should be able to start");
         });

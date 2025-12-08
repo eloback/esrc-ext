@@ -15,13 +15,9 @@ use super::*;
 /// various event streams, encoded as durable messages in a Jetstream instance.
 #[derive(Clone)]
 pub struct ExternalStore {
-    prefix: String,
-
     stream: JetStream,
 
     graceful_shutdown: GracefulShutdown,
-
-    durable_consumer_options: ConsumerConfig,
 }
 
 /// A structure to help with graceful shutdown of tasks.
@@ -43,9 +39,7 @@ impl ExternalStore {
     pub async fn try_new(
         context: Context,
         stream_config: &StreamConfig,
-        consumer_config: &ConsumerConfig,
     ) -> esrc::error::Result<Self> {
-        let prefix = stream_config.name.clone();
         let stream = context.get_or_create_stream(stream_config.clone()).await?;
 
         // if there is more than 1000 automations this should be increased
@@ -59,13 +53,9 @@ impl ExternalStore {
         };
 
         Ok(Self {
-            prefix,
-
             stream,
 
             graceful_shutdown,
-
-            durable_consumer_options: consumer_config.clone(),
         })
     }
 
@@ -97,13 +87,23 @@ impl ExternalStore {
     #[instrument(skip_all, level = "debug")]
     async fn durable_consumer(
         &self,
-        name: String,
-        subjects: Vec<String>,
+        config: ConsumerConfig,
     ) -> esrc::error::Result<Consumer<ConsumerConfig>> {
-        let mut config = self.durable_consumer_options.clone();
-
-        config.filter_subjects = subjects;
-        config.durable_name = Some(name);
+        if config.durable_name.is_none() {
+            return Err(esrc::error::Error::Format(
+                "durable_name must be set in consumer config".into(),
+            ));
+        }
+        if config.filter_subjects.is_empty() {
+            return Err(esrc::error::Error::Format(
+                "filter_subjects must be set in consumer config".into(),
+            ));
+        }
+        if config.deliver_policy != async_nats::jetstream::consumer::DeliverPolicy::All {
+            return Err(esrc::error::Error::Format(
+                "deliver_policy must be DeliverPolicy::All in consumer config".into(),
+            ));
+        }
 
         Ok(self.stream.create_consumer(config).await?)
     }
@@ -111,17 +111,9 @@ impl ExternalStore {
     #[instrument(skip_all, level = "debug")]
     async fn subscribe(
         &self,
-        unique_name: &str,
-        subjects: Vec<impl Into<String> + Send + Sync>,
+        config: ConsumerConfig,
     ) -> esrc::error::Result<impl Stream<Item = esrc::error::Result<Message>> + Send> {
-        let subjects: Vec<String> = subjects
-            .into_iter()
-            .map(|s| format!("{}.{}", self.prefix, s.into()))
-            .collect();
-
-        let consumer = self
-            .durable_consumer(unique_name.to_string(), subjects)
-            .await?;
+        let consumer = self.durable_consumer(config).await?;
         let messages = consumer
             .messages()
             .await?
@@ -131,17 +123,13 @@ impl ExternalStore {
 
     /// subscribe to the given subjects, and process incoming messages with the given projector.
     #[instrument(skip_all, level = "debug")]
-    pub async fn run_project<P>(&self, projector: P, feature_name: &str) -> esrc::error::Result<()>
+    pub async fn run_project<P>(&self, projector: P) -> esrc::error::Result<()>
     where
         P: TranslationProject + 'static,
     {
-        let stream = std::pin::pin!(
-            self.subscribe(
-                feature_name,
-                self.durable_consumer_options.filter_subjects.clone()
-            )
-            .await?
-        );
+        let config = projector.consumer_config();
+
+        let stream = std::pin::pin!(self.subscribe(config).await?);
         let (exit, mut incoming) = Valved::new(stream);
         self.graceful_shutdown
             .exit_tx

@@ -13,6 +13,12 @@ pub trait TranslationProject: Send + Clone {
     /// The type to return as an `Err` when the projection fails.
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Set the consumer configuration for this project.
+    /// This allows each project to customize its consumer settings.
+    ///
+    /// The `ConsumerConfig` is a type alias for `async_nats::jetstream::consumer::pull::Config`.
+    fn consumer_config(&self) -> async_nats::jetstream::consumer::pull::Config;
+
     /// Apply a received message, triggering implementation specific behavior.
     ///
     /// Returning an error from this method should stop further messages from
