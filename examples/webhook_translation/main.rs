@@ -1,5 +1,5 @@
 use async_nats::jetstream::{self};
-use esrc_ext::feature::Feature;
+use esrc_ext::feature::Translation;
 
 pub mod common;
 pub mod features;
@@ -50,13 +50,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // * Dependencies
     // Create CommandBus and attach handlers
-    let feature = Feature::new(&event_store);
+    let translation = Translation::new(&external_store);
 
     // * Translations Project
     {
         // User translation setup
         let user_project = features::create_user::setup(&mut router);
-        feature.start_translation(&external_store, user_project.clone(), "create_user");
+        translation.start_translation(user_project.clone(), "create_user");
     }
 
     // * Start Application

@@ -27,23 +27,6 @@ impl<'a> Feature<'a> {
         });
     }
 
-    pub fn start_translation<A>(
-        &self,
-        external_store: &ExternalStore,
-        project: A,
-        feature_name: &'static str,
-    ) where
-        A: crate::translation::TranslationProject + 'static,
-    {
-        let store = external_store.clone();
-        store.get_task_tracker().spawn(async move {
-            store
-                .run_project(project, feature_name)
-                .await
-                .expect("translation should be able to start");
-        });
-    }
-
     pub fn start_read_model_automation<A>(&self, project: A, feature_name: &'static str)
     where
         A: esrc::project::Project + 'static,
@@ -79,6 +62,29 @@ impl<'a> Feature<'a> {
                 )
                 .await
                 .expect("dead letter automation should be able to start");
+        });
+    }
+}
+
+pub struct Translation<'a> {
+    store: &'a ExternalStore,
+}
+
+impl<'a> Translation<'a> {
+    pub fn new(store: &'a ExternalStore) -> Translation<'a> {
+        Translation { store }
+    }
+
+    pub fn start_translation<A>(&self, project: A, feature_name: &'static str)
+    where
+        A: crate::translation::TranslationProject + 'static,
+    {
+        let store = self.store.clone();
+        store.get_task_tracker().spawn(async move {
+            store
+                .run_project(project, feature_name)
+                .await
+                .expect("translation should be able to start");
         });
     }
 }
