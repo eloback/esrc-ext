@@ -3,13 +3,19 @@ use esrc::{
     nats::NatsStore,
 };
 
-pub struct Feature<'a> {
+use crate::translation::ExternalStore;
+
+pub struct SliceRunner<'a> {
     store: &'a NatsStore,
+    external_store: Option<&'a ExternalStore>,
 }
 
-impl<'a> Feature<'a> {
-    pub fn new(store: &'a NatsStore) -> Self {
-        Self { store }
+impl<'a> SliceRunner<'a> {
+    pub fn new(store: &'a NatsStore, external_store: Option<&'a ExternalStore>) -> Self {
+        Self {
+            store,
+            external_store,
+        }
     }
 
     pub fn start_automation<A>(&self, project: A, feature_name: &'static str)
@@ -17,23 +23,6 @@ impl<'a> Feature<'a> {
         A: esrc::project::Project + 'static,
     {
         let store = self.store.clone();
-        store.get_task_tracker().spawn(async move {
-            store
-                .start_automation(project, feature_name)
-                .await
-                .expect("automation should be able to start");
-        });
-    }
-
-    pub fn start_translation<A>(
-        &self,
-        external_store: &NatsStore,
-        project: A,
-        feature_name: &'static str,
-    ) where
-        A: esrc::project::Project + 'static,
-    {
-        let store = external_store.clone();
         store.get_task_tracker().spawn(async move {
             store
                 .start_automation(project, feature_name)
@@ -54,6 +43,7 @@ impl<'a> Feature<'a> {
                 .expect("automation should be able to start");
         });
     }
+
     pub fn start_dead_letter_automation<A>(
         &self,
         durable_name: &'static str,
@@ -79,23 +69,21 @@ impl<'a> Feature<'a> {
                 .expect("dead letter automation should be able to start");
         });
     }
-}
 
-impl<'a> Feature<'a> {
-    pub fn start_legacy_automation<A>(
-        &self,
-        project: A,
-        feature_name: &'static str,
-        subjects: Vec<&'static str>,
-    ) where
-        A: esrc::nats::legacy::LegacyProject + 'static,
+    pub fn start_translation<A>(&self, project: A)
+    where
+        A: crate::translation::TranslationProject + 'static,
     {
-        let store = self.store.clone();
-        store.get_task_tracker().spawn(async move {
-            store
-                .run_legacy_project(project, feature_name, subjects)
+        if self.external_store.is_none() {
+            panic!("External store is required for translation projects");
+        }
+
+        let external_store = self.external_store.unwrap().clone();
+        external_store.get_task_tracker().spawn(async move {
+            external_store
+                .run_project(project)
                 .await
-                .expect("automation should be able to start");
+                .expect("translation should be able to start");
         });
     }
 }
