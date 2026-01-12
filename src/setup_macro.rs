@@ -27,6 +27,7 @@
 /// - `ReadModelRepository`: Event-sourced read model repositories
 /// - `PgViewProjector`: PostgreSQL-based read model projectors with initial setup
 /// - `LiveProjection`: Live projections that update in real-time
+/// - `Query`: Query handlers for Inter-Domain Queries (IDQ)
 ///
 /// ## Syntax
 ///
@@ -95,6 +96,14 @@
 /// ```
 /// - Real-time projections that update immediately
 /// - No background processes (updates happen inline)
+///
+/// ### Query
+/// ```ignore
+/// analytics::query_slice => (Query, setup_params: { query_bus })
+/// ```
+/// - Registers query handlers immediately
+/// - No background processes started
+/// - Mostly used for Inter-Domain Queries (IDQ)
 ///
 /// ## Complete Example
 ///
@@ -291,6 +300,20 @@ macro_rules! setup_slices {
         starters: $starters:ident,
         slice_path: $slice_path:path,
         feature_type: LiveProjection,
+        config: { setup_params: { $($params:expr),+ $(,)? } }
+    ) => {
+        {
+            // Used to fix the compiler error about 'AST fragment opacity', and enforce that the path is a path and not an expression.
+            use $slice_path as CurrentSlice;
+            CurrentSlice::setup($($params),+);
+        }
+    };
+
+    // Parse Query configuration
+    (@parse
+        starters: $starters:ident,
+        slice_path: $slice_path:path,
+        feature_type: Query,
         config: { setup_params: { $($params:expr),+ $(,)? } }
     ) => {
         {
