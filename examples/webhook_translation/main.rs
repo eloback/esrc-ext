@@ -1,5 +1,5 @@
 use async_nats::jetstream::{self};
-use esrc_ext::slice_runner::SliceRunner;
+use esrc_ext::slice_runner::start_translation;
 
 pub mod common;
 pub mod features;
@@ -42,15 +42,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut router = axum::Router::new();
 
-    // * Dependencies
-    // Create CommandBus and attach handlers
-    let translation = SliceRunner::new(&event_store, Some(&external_store));
-
     // * Translations Project
     {
         // User translation setup
         let user_project = features::create_user::setup(&mut router);
-        translation.start_translation(user_project);
+        start_translation(&external_store, user_project);
     }
 
     // * Start Application

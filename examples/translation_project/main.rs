@@ -1,5 +1,5 @@
 use async_nats::jetstream::{self};
-use esrc_ext::slice_runner::SliceRunner;
+use esrc_ext::slice_runner::start_translation;
 
 pub mod translations;
 
@@ -41,14 +41,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let external_store =
         esrc_ext::translation::ExternalStore::try_new(context.clone(), &external_stream).await?;
 
-    // * Dependencies
-    // Create CommandBus and attach handlers
-    let translation = SliceRunner::new(&event_store, Some(&external_store));
-
     // * Translations Project
     // User translation setup
     let user_project = translations::create_user::UserProject::new(event_store.clone()).await;
-    translation.start_translation(user_project.clone());
+    start_translation(&external_store, user_project.clone());
 
     // * Start Application
     // Spawn a task to handle CTRL+C for graceful shutdown
