@@ -9,7 +9,7 @@ use esrc_ext::{
         http::{AdminAppState, HasAdminAppState},
         AdminHandler,
     },
-    slice_runner::SliceRunner,
+    slice_runner::start_automation,
 };
 use nats_dead_letter::postgres::SqlxDeadLetterStore;
 use sqlx::postgres::PgPoolOptions;
@@ -68,12 +68,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // * Dependencies
     // Create CommandBus and attach handlers
     let mut admin_command_registry = registry::CommandHandlerRegistry::new();
-    let feature = SliceRunner::new(&event_store, None);
 
     // * Features
     // User feature setup
     let user_project = UserProject::new(db_pool.clone()).await;
-    feature.start_automation(user_project.clone(), "user_creation");
+    start_automation(&event_store, user_project.clone(), "user_creation");
 
     // Initialize NatsStore for dead letter management
     let admin_store = nats_dead_letter::NatsStore::try_new(context.clone(), "dead_letter").await?;

@@ -99,11 +99,6 @@ impl ExternalStore {
                 "filter_subjects must be set in consumer config".into(),
             ));
         }
-        if config.deliver_policy != async_nats::jetstream::consumer::DeliverPolicy::All {
-            return Err(esrc::error::Error::Format(
-                "deliver_policy must be DeliverPolicy::All in consumer config".into(),
-            ));
-        }
 
         Ok(self.stream.create_consumer(config).await?)
     }
