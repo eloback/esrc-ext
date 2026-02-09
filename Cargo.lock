@@ -498,9 +498,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "errno"
+version = "0.3.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.1",
+]
+
+[[package]]
 name = "esrc"
 version = "0.2.0"
-source = "git+https://github.com/eloback/esrc.git#52a67c792a308ce0f9582fa0a5b11084b44cb088"
+source = "git+https://github.com/eloback/esrc.git#166a919ee3f2cc24bea9825eae4794bf6243051d"
 dependencies = [
  "async-nats",
  "esrc-derive",
@@ -522,7 +532,7 @@ dependencies = [
 [[package]]
 name = "esrc-derive"
 version = "0.1.0"
-source = "git+https://github.com/eloback/esrc.git#52a67c792a308ce0f9582fa0a5b11084b44cb088"
+source = "git+https://github.com/eloback/esrc.git#166a919ee3f2cc24bea9825eae4794bf6243051d"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -551,7 +561,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "trait-variant",
- "url",
  "uuid",
 ]
 
@@ -1253,11 +1262,11 @@ dependencies = [
 
 [[package]]
 name = "nu-ansi-term"
-version = "0.50.1"
+version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4a28e057d01f97e61255210fcff094d74ed0466038633e95017f5beb68e4399"
+checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.1",
 ]
 
 [[package]]
@@ -1371,7 +1380,7 @@ dependencies = [
 [[package]]
 name = "opentelemetry-nats"
 version = "0.2.1"
-source = "git+https://github.com/eloback/esrc.git#52a67c792a308ce0f9582fa0a5b11084b44cb088"
+source = "git+https://github.com/eloback/esrc.git#166a919ee3f2cc24bea9825eae4794bf6243051d"
 dependencies = [
  "async-nats",
  "opentelemetry",
@@ -1933,10 +1942,11 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "signal-hook-registry"
-version = "1.4.6"
+version = "1.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2a4719bff48cee6b39d12c020eeb490953ad2443b7055bd0b21fca26bd8c28b"
+checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
 dependencies = [
+ "errno",
  "libc",
 ]
 
