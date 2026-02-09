@@ -216,10 +216,14 @@ macro_rules! setup_slices {
             use $slice_path as CurrentSlice;
             let project = CurrentSlice::setup($($params),+);
             let external_store = $external_store.clone();
+
+            // TODO: The max_concurrency of 100 is hardcoded here
+            // But ideally it should be possible to configure it via the macro parameter or via a environment variable
             $starters.push(Box::new(move || {
                 esrc_ext::slice_runner::start_translation(
                     &external_store,
                     project
+                    100,
                 );
             }));
         }
@@ -238,11 +242,15 @@ macro_rules! setup_slices {
             let project = CurrentSlice::setup($($params),+);
             let store = $store.clone();
             let feature_name = CurrentSlice::FEATURE_NAME;
+
+            // TODO: The max_concurrency of 100 is hardcoded here
+            // But ideally it should be possible to configure it via the macro parameter or via a environment variable
             $starters.push(Box::new(move || {
                 esrc_ext::slice_runner::start_automation(
                     &store,
                     project,
-                    feature_name
+                    feature_name,
+                    100,
                 );
             }));
         }

@@ -5,14 +5,18 @@ use esrc::{
 
 use crate::translation::ExternalStore;
 
-pub fn start_automation<A>(store: &NatsStore, project: A, feature_name: &'static str)
-where
+pub fn start_automation<A>(
+    store: &NatsStore,
+    project: A,
+    feature_name: &'static str,
+    max_concurrency: impl Into<Option<usize>> + Send + 'static,
+) where
     A: esrc::project::Project + 'static,
 {
     let store = store.clone();
     store.get_task_tracker().spawn(async move {
         store
-            .start_automation(project, feature_name)
+            .start_automation(project, feature_name, max_concurrency)
             .await
             .expect("automation should be able to start");
     });
@@ -52,14 +56,17 @@ pub fn start_dead_letter_automation<A>(
     });
 }
 
-pub fn start_translation<A>(external_store: &ExternalStore, project: A)
-where
+pub fn start_translation<A>(
+    external_store: &ExternalStore,
+    project: A,
+    max_concurrency: impl Into<Option<usize>> + Send + 'static,
+) where
     A: crate::translation::TranslationProject + 'static,
 {
     let external_store = external_store.clone();
     external_store.get_task_tracker().spawn(async move {
         external_store
-            .run_project(project)
+            .run_project(project, max_concurrency)
             .await
             .expect("translation should be able to start");
     });

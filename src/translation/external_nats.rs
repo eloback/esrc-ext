@@ -118,14 +118,18 @@ impl ExternalStore {
 
     /// subscribe to the given subjects, and process incoming messages with the given projector.
     #[instrument(skip_all, level = "debug")]
-    pub async fn run_project<P>(&self, projector: P) -> esrc::error::Result<()>
+    pub async fn run_project<P>(
+        &self,
+        projector: P,
+        max_concurrency: impl Into<Option<usize>> + Send,
+    ) -> esrc::error::Result<()>
     where
         P: TranslationProject + 'static,
     {
         let config = projector.consumer_config();
 
         let stream = std::pin::pin!(self.subscribe(config).await?);
-        let (exit, mut incoming) = Valved::new(stream);
+        let (exit, incoming) = Valved::new(stream);
         self.graceful_shutdown
             .exit_tx
             .clone()
@@ -133,15 +137,18 @@ impl ExternalStore {
             .await
             .expect("should be able to send graceful trigger");
 
-        while let Some(message) = incoming.next().await {
-            let mut projector = projector.clone();
+        // Configure throughput (concurrent workers)
+        incoming
+            .for_each_concurrent(max_concurrency, |message| {
+                let projector = projector.clone();
 
-            self.graceful_shutdown.task_tracker.spawn(async move {
-                if let Err(e) = process_message(&mut projector, message).await {
-                    tracing::error!("Error processing message: {:?}", e);
+                async move {
+                    if let Err(e) = process_message(&projector, message).await {
+                        tracing::error!("Failed to process message: {:?}", e);
+                    }
                 }
-            });
-        }
+            })
+            .await;
 
         Ok(())
     }

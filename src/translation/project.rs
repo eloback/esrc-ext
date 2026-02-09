@@ -7,7 +7,7 @@ use super::*;
 /// purpose is implementation specific; the trait only handles receiving the
 /// Envelopes for the specified events.
 #[trait_variant::make(Send)]
-pub trait TranslationProject: Send + Clone {
+pub trait TranslationProject: Send + Sync + Clone {
     /// The message(s) that can be processed by this object.
     type MessageGroup: for<'a> Deserialize<'a> + Send;
     /// The type to return as an `Err` when the projection fails.
@@ -33,7 +33,7 @@ pub trait TranslationProject: Send + Clone {
 /// recieves a message, processes it with the given projector, and acknowledges it.
 #[instrument(skip_all, name = "translation", level = "info", err(Debug))]
 pub async fn process_message<P: TranslationProject>(
-    projector: &mut P,
+    projector: &P,
     message: Result<Message, esrc::error::Error>,
 ) -> esrc::error::Result<()> {
     let envelope = message?;
@@ -47,6 +47,7 @@ pub async fn process_message<P: TranslationProject>(
         .and_then(|v| serde_json::to_value(v).ok());
     let event: P::MessageGroup = serde_json::from_slice(&envelope.payload).unwrap();
 
+    let mut projector = projector.clone();
     projector
         .project(event, headers)
         .await
