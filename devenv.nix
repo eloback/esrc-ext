@@ -13,6 +13,8 @@ in
       packages = [
         # NATS
         pkgs.natscli
+        pkgs.cargo-machete
+        pkgs.cargo-expand
       ];
       processes.nats-server = {
         exec = "${lib.getExe pkgs.nats-server} -js -DV -sd .devenv/state/nats";
