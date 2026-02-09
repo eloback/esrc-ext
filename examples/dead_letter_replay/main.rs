@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // * Features
     // User feature setup
     let user_project = UserProject::new(db_pool.clone()).await;
-    start_automation(&event_store, user_project.clone(), "user_creation");
+    start_automation(&event_store, user_project.clone(), "user_creation", 100);
 
     // Initialize NatsStore for dead letter management
     let admin_store = nats_dead_letter::NatsStore::try_new(context.clone(), "dead_letter").await?;

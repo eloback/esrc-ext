@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         // User translation setup
         let user_project = features::create_user::setup(&mut router);
-        start_translation(&external_store, user_project);
+        start_translation(&external_store, user_project, 100);
     }
 
     // * Start Application

@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // * Translations Project
     // User translation setup
     let user_project = translations::create_user::UserProject::new(event_store.clone()).await;
-    start_translation(&external_store, user_project.clone());
+    start_translation(&external_store, user_project.clone(), 100);
 
     // * Start Application
     // Spawn a task to handle CTRL+C for graceful shutdown
