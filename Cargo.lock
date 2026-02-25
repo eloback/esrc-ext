@@ -43,13 +43,13 @@ dependencies = [
 
 [[package]]
 name = "async-nats"
-version = "0.42.0"
+version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08f6da6d49a956424ca4e28fe93656f790d748b469eaccbc7488fec545315180"
+checksum = "df5af9ebfb0a14481d3eaf6101e6391261e4f30d25b26a7635ade8a39482ded0"
 dependencies = [
  "base64",
  "bytes",
- "futures",
+ "futures-util",
  "memchr",
  "nkeys",
  "nuid",
@@ -60,7 +60,7 @@ dependencies = [
  "regex",
  "ring",
  "rustls-native-certs",
- "rustls-pemfile",
+ "rustls-pki-types",
  "rustls-webpki 0.102.8",
  "serde",
  "serde_json",
@@ -70,6 +70,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-rustls",
+ "tokio-stream",
  "tokio-util",
  "tokio-websockets",
  "tracing",
@@ -509,13 +510,13 @@ dependencies = [
 
 [[package]]
 name = "esrc"
-version = "0.2.0"
-source = "git+https://github.com/eloback/esrc.git#166a919ee3f2cc24bea9825eae4794bf6243051d"
+version = "0.3.0"
+source = "git+https://github.com/eloback/esrc.git#67750eb0fb3ef97bd08e27822628db62dcb2ecbe"
 dependencies = [
  "async-nats",
  "esrc-derive",
  "futures",
- "opentelemetry-nats 0.2.1 (git+https://github.com/eloback/esrc.git)",
+ "opentelemetry-nats 0.2.1",
  "serde",
  "serde_json",
  "stream-cancel",
@@ -532,7 +533,7 @@ dependencies = [
 [[package]]
 name = "esrc-derive"
 version = "0.1.0"
-source = "git+https://github.com/eloback/esrc.git#166a919ee3f2cc24bea9825eae4794bf6243051d"
+source = "git+https://github.com/eloback/esrc.git#67750eb0fb3ef97bd08e27822628db62dcb2ecbe"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -542,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "esrc-ext"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-nats",
  "axum",
@@ -550,7 +551,7 @@ dependencies = [
  "esrc",
  "futures",
  "nats-dead-letter",
- "opentelemetry-nats 0.2.1",
+ "opentelemetry-nats 0.3.1",
  "serde",
  "serde_json",
  "sqlx",
@@ -1226,8 +1227,8 @@ dependencies = [
 
 [[package]]
 name = "nats-dead-letter"
-version = "0.1.0"
-source = "git+https://github.com/eloback/nats-dead-letter.git#9d5cafe7332862fd45c2c4fee92c497842368281"
+version = "0.2.0"
+source = "git+https://github.com/eloback/nats-dead-letter.git#3b0eb803240008dce61f8037cbff69b6e55c77fa"
 dependencies = [
  "async-nats",
  "eyre",
@@ -1369,6 +1370,7 @@ dependencies = [
 [[package]]
 name = "opentelemetry-nats"
 version = "0.2.1"
+source = "git+https://github.com/eloback/esrc.git#67750eb0fb3ef97bd08e27822628db62dcb2ecbe"
 dependencies = [
  "async-nats",
  "opentelemetry",
@@ -1379,8 +1381,7 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-nats"
-version = "0.2.1"
-source = "git+https://github.com/eloback/esrc.git#166a919ee3f2cc24bea9825eae4794bf6243051d"
+version = "0.3.1"
 dependencies = [
  "async-nats",
  "opentelemetry",

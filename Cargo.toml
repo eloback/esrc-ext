@@ -1,6 +1,6 @@
 [package]
 name = "esrc-ext"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 authors = ["Eduardo Loback <...>", "Mateus Barbosa <barbosamat16@gmail.com>"]
 description = "Extensions for ESRC, an event-sourcing library for Rust."
@@ -11,17 +11,17 @@ keywords = ["esrc", "extensions", "event-sourcing"]
 categories = ["asynchronous", "data-structures", "encoding", "serialization"]
 
 [dependencies]
-esrc = { git = "https://github.com/eloback/esrc.git", version = "0.2.0", features = [
+esrc = { git = "https://github.com/eloback/esrc.git", version = "0.3.0", features = [
     "derive",
 ] }
-nats-dead-letter = { git = "https://github.com/eloback/nats-dead-letter.git", version = "0.1.0" }
+nats-dead-letter = { git = "https://github.com/eloback/nats-dead-letter.git", version = "0.2.0" }
 opentelemetry-nats = { path = "./crates/opentelemetry-nats" }
 axum = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "1.0", features = ["v7", "serde"] }
 thiserror = "2.0"
 serde_json = "1.0"
-async-nats = "0.42"
+async-nats = "0.46"
 tracing = "0.1"
 sqlx = { version = "0.8", features = [
     "runtime-tokio-rustls",

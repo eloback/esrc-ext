@@ -1,6 +1,6 @@
 [package]
 name = "opentelemetry-nats"
-version = "0.2.1"
+version = "0.3.1"
 description = "Convenience functions for propagating OpenTelemetry traces on NATS messages"
 edition = "2024"
 authors = ["Eduardo Loback <...>", "Mateus Barbosa <barbosamat16@gmail.com>"]
@@ -12,7 +12,7 @@ categories = ["asynchronous", "data-structures", "encoding", "serialization"]
 default = []
 
 [dependencies]
-async-nats = "0.42"
+async-nats = "0.46"
 opentelemetry = { version = "0.23" }
 opentelemetry_sdk = { version = "0.23", features = [
     "trace",
