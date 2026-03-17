@@ -222,8 +222,8 @@ macro_rules! setup_slices {
             $starters.push(Box::new(move || {
                 esrc_ext::slice_runner::start_translation(
                     &external_store,
-                    project
-                    100,
+                    project,
+                    100
                 );
             }));
         }
@@ -250,7 +250,7 @@ macro_rules! setup_slices {
                     &store,
                     project,
                     feature_name,
-                    100,
+                    100
                 );
             }));
         }
