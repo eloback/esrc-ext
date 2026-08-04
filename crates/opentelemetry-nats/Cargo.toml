@@ -12,7 +12,7 @@ categories = ["asynchronous", "data-structures", "encoding", "serialization"]
 default = []
 
 [dependencies]
-async-nats = "0.46"
+async-nats = "0.50"
 opentelemetry = { version = "0.23" }
 opentelemetry_sdk = { version = "0.23", features = [
     "trace",

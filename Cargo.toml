@@ -11,7 +11,7 @@ keywords = ["esrc", "extensions", "event-sourcing"]
 categories = ["asynchronous", "data-structures", "encoding", "serialization"]
 
 [dependencies]
-esrc = { git = "https://github.com/eloback/esrc.git", version = "0.3.0", features = [
+esrc = { git = "https://github.com/eloback/esrc.git", version = "0.4.0", features = [
     "derive",
 ] }
 nats-dead-letter = { git = "https://github.com/eloback/nats-dead-letter.git", version = "0.2.0" }
@@ -21,7 +21,7 @@ serde = { version = "1.0", features = ["derive"] }
 uuid = { version = "1.0", features = ["v7", "serde"] }
 thiserror = "2.0"
 serde_json = "1.0"
-async-nats = "0.46"
+async-nats = "0.50"
 tracing = "0.1"
 sqlx = { version = "0.8", features = [
     "runtime-tokio-rustls",
@@ -37,6 +37,7 @@ trait-variant = "0.1"
 futures = "0.3.31"
 
 [dev-dependencies]
+async-nats-046 = { package = "async-nats", version = "0.46" }
 tokio = { version = "1.0", features = ["full"] }
 tracing-subscriber = "0.3"
 
