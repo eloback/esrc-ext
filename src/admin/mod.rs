@@ -1,6 +1,6 @@
-use async_nats::jetstream;
 use discern::command::Command;
 use discern::command::CommandHandler;
+use esrc::prelude::async_nats::jetstream;
 use esrc::prelude::*;
 use nats_dead_letter::DeadLetterStore;
 use uuid::Uuid;

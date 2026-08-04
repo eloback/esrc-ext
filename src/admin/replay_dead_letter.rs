@@ -1,4 +1,4 @@
-use async_nats::{jetstream, HeaderMap, Message, Subject};
+use esrc::prelude::async_nats::{jetstream, HeaderMap, Message, Subject};
 use esrc::prelude::*;
 use nats_dead_letter::DeadLetterStore;
 use serde::Serialize;

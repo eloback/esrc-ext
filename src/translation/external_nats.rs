@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use async_nats::jetstream::{consumer::Consumer, Context};
+use esrc::prelude::async_nats::jetstream::{consumer::Consumer, Context};
 use futures::{Stream, StreamExt, TryStreamExt};
 use stream_cancel::Trigger;
 use tokio::sync::mpsc::{Receiver, Sender};
