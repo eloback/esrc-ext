@@ -1,4 +1,5 @@
 use async_nats::jetstream::{self};
+use esrc::prelude::*;
 use esrc_ext::slice_runner::start_translation;
 
 pub mod translations;
@@ -19,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let context = jetstream::new(client.clone());
 
     // Initialize the features and event store for your actual application
-    let event_store = esrc::nats::NatsStore::try_new(context.clone(), "users")
+    let event_store = NatsStore::try_new(context.clone(), "users")
         .await?
         .update_durable_consumer_option(jetstream::consumer::pull::Config {
             backoff: vec![std::time::Duration::from_secs(2)],

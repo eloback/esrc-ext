@@ -1,7 +1,4 @@
-use esrc::{
-    project::{Context, Project},
-    Envelope,
-};
+use esrc::prelude::*;
 use sqlx::PgPool;
 
 use crate::domain::user::Events;
@@ -9,7 +6,7 @@ use crate::domain::user::Events;
 #[derive(Debug, thiserror::Error)]
 pub enum UserErrors {
     #[error(transparent)]
-    EventStore(#[from] esrc::Error),
+    EventStore(#[from] Error),
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
 }

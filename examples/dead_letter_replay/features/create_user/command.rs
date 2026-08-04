@@ -1,4 +1,4 @@
-use esrc::Aggregate;
+use esrc::prelude::*;
 
 use crate::domain::user::Events;
 
