@@ -1,4 +1,5 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use esrc::prelude::async_nats;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use uuid::Uuid;

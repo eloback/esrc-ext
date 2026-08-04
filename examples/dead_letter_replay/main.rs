@@ -1,5 +1,5 @@
-use async_nats::jetstream::{self};
 use discern::registry;
+use esrc::prelude::async_nats::jetstream::{self};
 use esrc::prelude::*;
 use esrc_ext::{
     admin::{
