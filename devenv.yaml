@@ -17,5 +17,6 @@ inputs:
       nixpkgs:
         follows: nixpkgs
 allowUnfree: true
+strictPorts: true
 imports:
 - nixdev
