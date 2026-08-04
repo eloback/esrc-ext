@@ -52,6 +52,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = async_nats::connect(&nats_url).await?;
     let context = jetstream::new(client.clone());
 
+    // nats-dead-letter 0.2 still uses async-nats 0.46 internally.
+    let dead_letter_client = async_nats_046::connect(&nats_url).await?;
+    let dead_letter_context = async_nats_046::jetstream::new(dead_letter_client);
+
     // Initialize the features and event store for your actual application
     let mut event_store = esrc::nats::NatsStore::try_new(context.clone(), "users")
         .await?
@@ -75,7 +79,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     start_automation(&event_store, user_project.clone(), "user_creation", 100);
 
     // Initialize NatsStore for dead letter management
-    let admin_store = nats_dead_letter::NatsStore::try_new(context.clone(), "dead_letter").await?;
+    let admin_store =
+        nats_dead_letter::NatsStore::try_new(dead_letter_context, "dead_letter").await?;
     let dead_letter_store = SqlxDeadLetterStore::new(db_pool.clone());
 
     tracing::info!("Dead letter automation started");

@@ -48,7 +48,7 @@ impl Project for UserProject {
         &mut self,
         context: Context<'de, E, Self::EventGroup>,
     ) -> Result<(), Self::Error> {
-        println!("Processing event: {:?}", &Context::id(&context));
+        println!("Processing event: {:?}", Context::id(&context));
 
         match context.clone() {
             Self::EventGroup::UserCreated {
