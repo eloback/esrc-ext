@@ -350,7 +350,7 @@ macro_rules! setup_slices {
 /// ```
 ///
 /// Each store will be created as a variable with its concrete type:
-/// - `operations` will have type `esrc::nats::NatsStore`
+/// - `operations` will have type `esrc::prelude::NatsStore`
 /// - `dead_letters` will have type `nats_dead_letter::NatsStore`
 /// - `external` will have type `esrc_ext::translation::ExternalStore`
 ///
@@ -383,7 +383,7 @@ macro_rules! create_event_stores {
         store_type: Nats,
         args: ( $context:expr, $stream_name:expr, $consumer_config:expr )
     ) => {
-        let $store_name = esrc::nats::NatsStore::try_new($context.clone(), $stream_name).await?
+        let $store_name = esrc::prelude::NatsStore::try_new($context.clone(), $stream_name).await?
             .update_durable_consumer_option($consumer_config);
     };
 

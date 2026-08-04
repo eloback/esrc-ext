@@ -1,7 +1,4 @@
-use esrc::{
-    event::event_model::{Automation, ViewAutomation},
-    nats::NatsStore,
-};
+use esrc::prelude::*;
 
 use crate::translation::ExternalStore;
 
@@ -11,7 +8,7 @@ pub fn start_automation<A>(
     feature_name: &'static str,
     max_concurrency: impl Into<Option<usize>> + Send + 'static,
 ) where
-    A: esrc::project::Project + 'static,
+    A: Project + 'static,
 {
     let store = store.clone();
     store.get_task_tracker().spawn(async move {
@@ -24,7 +21,7 @@ pub fn start_automation<A>(
 
 pub fn start_read_model_automation<A>(store: &NatsStore, project: A, feature_name: &'static str)
 where
-    A: esrc::project::Project + 'static,
+    A: Project + 'static,
 {
     let store = store.clone();
     store.get_task_tracker().spawn(async move {

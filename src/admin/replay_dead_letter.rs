@@ -1,5 +1,5 @@
 use async_nats::{jetstream, HeaderMap, Message, Subject};
-use esrc::{nats::NatsEnvelope, project::Project};
+use esrc::prelude::*;
 use nats_dead_letter::DeadLetterStore;
 use serde::Serialize;
 
@@ -132,7 +132,7 @@ where
                 })?;
 
             // From the envelope, convert it to a context
-            let context = esrc::project::Context::try_with_envelope(&envelope).map_err(|e| {
+            let context = Context::try_with_envelope(&envelope).map_err(|e| {
                 ReplayDeadLetterError::NatsJetstream(
                     format!("Failed to create context: {}", e).into(),
                 )
@@ -246,12 +246,11 @@ where
                     })?;
 
                 // From the envelope, convert it to a context
-                let context =
-                    esrc::project::Context::try_with_envelope(&envelope).map_err(|e| {
-                        ReplayDeadLetterError::NatsJetstream(
-                            format!("Failed to create context: {}", e).into(),
-                        )
-                    })?;
+                let context = Context::try_with_envelope(&envelope).map_err(|e| {
+                    ReplayDeadLetterError::NatsJetstream(
+                        format!("Failed to create context: {}", e).into(),
+                    )
+                })?;
 
                 let mut project = self.project.clone();
                 match project.project(context).await {
