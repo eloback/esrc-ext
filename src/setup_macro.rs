@@ -141,8 +141,15 @@ impl SetupError {
 /// ```ignore
 /// // First, create event stores
 /// create_event_stores! {
-///     operacoes => (Nats, context, "operacoes", consumer_config),
-///     external => (External, context, external_stream_config),
+///     operacoes => Nats {
+///         context: context,
+///         stream_name: "operacoes",
+///         consumer_config: consumer_config,
+///     },
+///     external => External {
+///         context: context,
+///         stream_config: external_stream_config,
+///     },
 /// }
 ///
 /// // Then setup slices
@@ -433,13 +440,33 @@ macro_rules! setup_slices {
 /// - `DeadLetter`: Dead letter queue store for failed events
 /// - `External`: External event store for cross-context communication
 ///
-/// # Syntax
+/// # Structured syntax
+///
+/// Store configuration uses named fields so new options can be added without extending a
+/// positional tuple. `NatsStoreOptions::default()` requests one replica (R1), while
+/// `NatsStoreOptions::replicated()` requests three replicas (R3).
+///
 /// ```ignore
 /// create_event_stores! {
-///     operations => (Nats, jetstream_context, "operacoes", consumer_config),
-///     formalizations => (Nats, jetstream_context, "formalizations", consumer_config),
-///     dead_letters => (DeadLetter, jetstream_context, "dead_letters"),
-///     external => (External, external_context, "external", external_stream_config),
+///     operations => Nats {
+///         context: jetstream_context,
+///         stream_name: "operations",
+///         consumer_config: consumer_config,
+///     },
+///     replicated_operations => Nats {
+///         context: jetstream_context,
+///         stream_name: "replicated_operations",
+///         options: esrc::prelude::NatsStoreOptions::replicated(),
+///         consumer_config: consumer_config,
+///     },
+///     dead_letters => DeadLetter {
+///         context: dead_letter_context,
+///         stream_name: "dead_letters",
+///     },
+///     external => External {
+///         context: external_context,
+///         stream_config: external_stream_config,
+///     },
 /// }
 /// ```
 ///
@@ -453,51 +480,117 @@ macro_rules! setup_slices {
 /// - `store_type`: Either `Nats`, `DeadLetter`, or `External`
 /// - `context`: JetStream context for the store
 /// - `stream_name`: Name of the NATS stream
+/// - `options`: Optional [`esrc::prelude::NatsStoreOptions`]; defaults to R1
 /// - `consumer_config`: Consumer configuration of type `async_nats::jetstream::consumer::pull::Config` for NATS
 /// - `stream_config`: Stream configuration of type `async_nats::jetstream::stream::Config` for External stores
 #[macro_export]
 macro_rules! create_event_stores {
+    () => {};
+
+    // Parse named store entries recursively so every generated binding remains in the caller's
+    // scope.
     (
-        $(
-            $store_name:ident => ( $store_type:ident, $($args:tt)+ )
-        ),+ $(,)?
+        $store_name:ident => $store_type:ident { $($config:tt)* }
+        $(, $($rest:tt)*)?
     ) => {
+        $crate::create_event_stores!(@single
+            name: $store_name,
+            store_type: $store_type,
+            config: { $($config)* }
+        );
         $(
-            $crate::create_event_stores!(@single
-                name: $store_name,
-                store_type: $store_type,
-                args: ( $($args)+ )
-            );
-        )+
+            $crate::create_event_stores!($($rest)*);
+        )?
     };
 
-    // Handler for Nats store
+    // NATS with explicit options. Passing the options object through makes this arm compatible
+    // with future fields added by esrc without teaching this macro about each field.
     (@single
         name: $store_name:ident,
         store_type: Nats,
-        args: ( $context:expr, $stream_name:expr, $consumer_config:expr )
+        config: {
+            context: $context:expr,
+            stream_name: $stream_name:expr,
+            options: $options:expr,
+            consumer_config: $consumer_config:expr $(,)?
+        }
     ) => {
-        let $store_name = esrc::prelude::NatsStore::try_new($context.clone(), $stream_name).await?
-            .update_durable_consumer_option($consumer_config);
+        let $store_name = esrc::prelude::NatsStore::try_new_with_options(
+            ($context).clone(),
+            $stream_name,
+            $options,
+        )
+        .await?
+        .update_durable_consumer_option($consumer_config);
     };
 
-    // Handler for DeadLetter store
+    // Omitting options selects the default R1 behavior.
+    (@single
+        name: $store_name:ident,
+        store_type: Nats,
+        config: {
+            context: $context:expr,
+            stream_name: $stream_name:expr,
+            consumer_config: $consumer_config:expr $(,)?
+        }
+    ) => {
+        $crate::create_event_stores!(@single
+            name: $store_name,
+            store_type: Nats,
+            config: {
+                context: $context,
+                stream_name: $stream_name,
+                options: esrc::prelude::NatsStoreOptions::default(),
+                consumer_config: $consumer_config,
+            }
+        );
+    };
+
     (@single
         name: $store_name:ident,
         store_type: DeadLetter,
-        args: ( $context:expr, $stream_name:expr )
+        config: {
+            context: $context:expr,
+            stream_name: $stream_name:expr $(,)?
+        }
     ) => {
-        let $store_name = nats_dead_letter::NatsStore::try_new($context.clone(), $stream_name).await?;
+        let $store_name = nats_dead_letter::NatsStore::try_new(
+            ($context).clone(),
+            $stream_name,
+        )
+        .await?;
     };
 
-    // Handler for External store
     (@single
         name: $store_name:ident,
         store_type: External,
-        args: ( $context:expr, $stream_config:expr )
+        config: {
+            context: $context:expr,
+            stream_config: $stream_config:expr $(,)?
+        }
     ) => {
-        let $store_name = esrc_ext::translation::ExternalStore::try_new($context.clone(), $stream_config).await?;
+        let __esrc_ext_stream_config = $stream_config;
+        let $store_name = $crate::translation::ExternalStore::try_new(
+            ($context).clone(),
+            &__esrc_ext_stream_config,
+        )
+        .await?;
     };
+
+    (@single
+        name: $store_name:ident,
+        store_type: $store_type:ident,
+        config: { $($config:tt)* }
+    ) => {
+        compile_error!(concat!(
+            "invalid create_event_stores! configuration for `",
+            stringify!($store_name),
+            "` (store type `",
+            stringify!($store_type),
+            "`)"
+        ));
+    };
+
 }
 
 /// Create a registry and bus pair (command or query).
@@ -569,6 +662,36 @@ mod tests {
 
     mod parameterless_slice {
         pub fn setup() {}
+    }
+
+    // Compile-time coverage for the public store syntax. The function is never executed because
+    // constructing the stores requires a live NATS server.
+    #[allow(dead_code)]
+    async fn structured_event_store_configuration_compiles(
+        context: esrc::prelude::async_nats::jetstream::Context,
+        consumer_config: esrc::prelude::async_nats::jetstream::consumer::pull::Config,
+        external_stream_config: esrc::prelude::async_nats::jetstream::stream::Config,
+    ) -> esrc::error::Result<()> {
+        crate::create_event_stores! {
+            r1 => Nats {
+                context: context,
+                stream_name: "r1",
+                consumer_config: consumer_config.clone(),
+            },
+            r3 => Nats {
+                context: context,
+                stream_name: "r3",
+                options: esrc::prelude::NatsStoreOptions::replicated(),
+                consumer_config: consumer_config.clone(),
+            },
+            external => External {
+                context: context,
+                stream_config: external_stream_config,
+            },
+        }
+
+        let _ = (r1, r3, external);
+        Ok(())
     }
 
     #[test]
