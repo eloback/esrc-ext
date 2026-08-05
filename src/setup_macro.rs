@@ -3,6 +3,35 @@
 //! These macros provide a consistent pattern for setting up features, read models,
 //! and automations across different projects.
 
+use std::error::Error;
+
+/// Default number of messages processed concurrently by automations and translations.
+pub const DEFAULT_MAX_CONCURRENCY: usize = 100;
+
+/// Adds the failing component's name to errors raised while initializing application slices.
+#[derive(Debug, thiserror::Error)]
+#[error("failed to initialize {component}: {source}")]
+pub struct SetupError {
+    component: &'static str,
+    #[source]
+    source: Box<dyn Error + Send + Sync>,
+}
+
+impl SetupError {
+    #[doc(hidden)]
+    pub fn new(component: &'static str, source: impl Error + Send + Sync + 'static) -> Self {
+        Self {
+            component,
+            source: Box::new(source),
+        }
+    }
+
+    /// The slice or store that failed to initialize.
+    pub fn component(&self) -> &'static str {
+        self.component
+    }
+}
+
 /// Setup multiple event-sourced slices with automatic lifecycle management.
 ///
 /// This macro provides a declarative way to configure and initialize event-sourced slices
@@ -54,6 +83,7 @@
 /// ```ignore
 /// integration::external_events => (Translation,
 ///     external_store: external,
+///     max_concurrency: 50, // Optional; defaults to 100
 ///     setup_params: { command_bus }
 /// )
 /// ```
@@ -64,6 +94,7 @@
 /// ```ignore
 /// notifications::automation => (Automation,
 ///     project_start_event_store: operacoes,
+///     max_concurrency: 50, // Optional; defaults to 100
 ///     setup_params: { command_bus }
 /// )
 /// ```
@@ -88,7 +119,7 @@
 /// )
 /// ```
 /// - PostgreSQL-based projections with schema migration
-/// - Runs initial setup synchronously, then starts background projection
+/// - Awaits initial setup, then starts background projection
 ///
 /// ### LiveProjection
 /// ```ignore
@@ -153,14 +184,16 @@
 ///
 /// ## Error Handling
 ///
-/// - PgViewProjector panics if initial setup fails with message "Could not start PgViewProjector"
-/// - Other failures propagate through the setup functions
+/// - `PgViewProjector` initialization errors are wrapped in [`SetupError`] with the slice name
+///   and propagated to the caller.
+/// - Configurations containing a `PgViewProjector` must be invoked from an async function whose
+///   error type can accept [`SetupError`].
 ///
 /// ## Performance Considerations
 ///
-/// - All `setup()` calls are synchronous and sequential
+/// - Slice factory calls are synchronous and sequential.
 /// - Background processes use deferred execution via closures
-/// - No async/await in macro expansion (use `futures::executor::block_on` for PgViewProjector)
+/// - `PgViewProjector` initialization is awaited without blocking the async executor.
 #[macro_export]
 macro_rules! setup_slices {
     (
@@ -171,164 +204,225 @@ macro_rules! setup_slices {
         }
     ) => {
         {
-            // Collection to store startup closures
-            let mut __project_starters: Vec<Box<dyn FnOnce()>> = Vec::new();
+            let mut __esrc_ext_starters: std::vec::Vec<std::boxed::Box<dyn FnOnce()>> =
+                std::vec::Vec::new();
 
             $(
                 $crate::setup_slices!(@parse
-                    starters: __project_starters,
+                    starters: __esrc_ext_starters,
                     slice_path: $slice_path,
                     feature_type: $feature_type,
                     config: { $($config)+ }
                 );
             )+
 
-            // Execute all project starters after setup is complete
-            for starter in __project_starters {
-                starter();
+            for __esrc_ext_start in __esrc_ext_starters {
+                __esrc_ext_start();
             }
         }
     };
 
-    // Parse Feature configuration
     (@parse
-        starters: $starters:ident,
+        starters: $_starters:ident,
         slice_path: $slice_path:path,
         feature_type: Feature,
-        config: { setup_params: { $($params:expr),+ $(,)? } }
+        config: { setup_params: { $($params:expr),* $(,)? } }
     ) => {
         {
-            // Used to fix the compiler error about 'AST fragment opacity', and enforce that the path is a path and not an expression.
-            use $slice_path as CurrentSlice;
-            CurrentSlice::setup($($params),+);
+            use $slice_path as __EsrcExtCurrentSlice;
+            __EsrcExtCurrentSlice::setup($($params),*);
         }
     };
 
-    // Parse Translation configuration
     (@parse
         starters: $starters:ident,
         slice_path: $slice_path:path,
         feature_type: Translation,
-        config: { external_store: $external_store:ident, setup_params: { $($params:expr),+ $(,)? } }
+        config: {
+            external_store: $external_store:expr,
+            max_concurrency: $max_concurrency:expr,
+            setup_params: { $($params:expr),* $(,)? }
+        }
     ) => {
         {
-            // Used to fix the compiler error about 'AST fragment opacity', and enforce that the path is a path and not an expression.
-            use $slice_path as CurrentSlice;
-            let project = CurrentSlice::setup($($params),+);
-            let external_store = $external_store.clone();
-
-            // TODO: The max_concurrency of 100 is hardcoded here
-            // But ideally it should be possible to configure it via the macro parameter or via a environment variable
-            $starters.push(Box::new(move || {
-                esrc_ext::slice_runner::start_translation(
-                    &external_store,
-                    project,
-                    100
+            use $slice_path as __EsrcExtCurrentSlice;
+            let __esrc_ext_project = __EsrcExtCurrentSlice::setup($($params),*);
+            let __esrc_ext_store = ($external_store).clone();
+            let __esrc_ext_max_concurrency = $max_concurrency;
+            $starters.push(std::boxed::Box::new(move || {
+                $crate::slice_runner::start_translation(
+                    &__esrc_ext_store,
+                    __esrc_ext_project,
+                    __esrc_ext_max_concurrency,
                 );
             }));
         }
     };
 
-    // Parse Automation configuration
+    (@parse
+        starters: $starters:ident,
+        slice_path: $slice_path:path,
+        feature_type: Translation,
+        config: {
+            external_store: $external_store:expr,
+            setup_params: { $($params:expr),* $(,)? }
+        }
+    ) => {
+        $crate::setup_slices!(@parse
+            starters: $starters,
+            slice_path: $slice_path,
+            feature_type: Translation,
+            config: {
+                external_store: $external_store,
+                max_concurrency: $crate::setup_macro::DEFAULT_MAX_CONCURRENCY,
+                setup_params: { $($params),* }
+            }
+        )
+    };
+
     (@parse
         starters: $starters:ident,
         slice_path: $slice_path:path,
         feature_type: Automation,
-        config: { project_start_event_store: $store:ident, setup_params: { $($params:expr),+ $(,)? } }
+        config: {
+            project_start_event_store: $store:expr,
+            max_concurrency: $max_concurrency:expr,
+            setup_params: { $($params:expr),* $(,)? }
+        }
     ) => {
         {
-            // Used to fix the compiler error about 'AST fragment opacity', and enforce that the path is a path and not an expression.
-            use $slice_path as CurrentSlice;
-            let project = CurrentSlice::setup($($params),+);
-            let store = $store.clone();
-            let feature_name = CurrentSlice::FEATURE_NAME;
-
-            // TODO: The max_concurrency of 100 is hardcoded here
-            // But ideally it should be possible to configure it via the macro parameter or via a environment variable
-            $starters.push(Box::new(move || {
-                esrc_ext::slice_runner::start_automation(
-                    &store,
-                    project,
-                    feature_name,
-                    100
+            use $slice_path as __EsrcExtCurrentSlice;
+            let __esrc_ext_project = __EsrcExtCurrentSlice::setup($($params),*);
+            let __esrc_ext_store = ($store).clone();
+            let __esrc_ext_feature_name = __EsrcExtCurrentSlice::FEATURE_NAME;
+            let __esrc_ext_max_concurrency = $max_concurrency;
+            $starters.push(std::boxed::Box::new(move || {
+                $crate::slice_runner::start_automation(
+                    &__esrc_ext_store,
+                    __esrc_ext_project,
+                    __esrc_ext_feature_name,
+                    __esrc_ext_max_concurrency,
                 );
             }));
         }
     };
 
-    // Parse ReadModelRepository configuration
+    (@parse
+        starters: $starters:ident,
+        slice_path: $slice_path:path,
+        feature_type: Automation,
+        config: {
+            project_start_event_store: $store:expr,
+            setup_params: { $($params:expr),* $(,)? }
+        }
+    ) => {
+        $crate::setup_slices!(@parse
+            starters: $starters,
+            slice_path: $slice_path,
+            feature_type: Automation,
+            config: {
+                project_start_event_store: $store,
+                max_concurrency: $crate::setup_macro::DEFAULT_MAX_CONCURRENCY,
+                setup_params: { $($params),* }
+            }
+        )
+    };
+
     (@parse
         starters: $starters:ident,
         slice_path: $slice_path:path,
         feature_type: ReadModelRepository,
-        config: { project_start_event_store: $store:ident, setup_params: { $($params:expr),+ $(,)? } }
+        config: {
+            project_start_event_store: $store:expr,
+            setup_params: { $($params:expr),* $(,)? }
+        }
     ) => {
         {
-            // Used to fix the compiler error about 'AST fragment opacity', and enforce that the path is a path and not an expression.
-            use $slice_path as CurrentSlice;
-            let project = CurrentSlice::setup($($params),+);
-            let store = $store.clone();
-            let feature_name = CurrentSlice::FEATURE_NAME;
-            $starters.push(Box::new(move || {
-                esrc_ext::slice_runner::start_read_model_automation(
-                    &store,
-                    project,
-                    feature_name
+            use $slice_path as __EsrcExtCurrentSlice;
+            let __esrc_ext_project = __EsrcExtCurrentSlice::setup($($params),*);
+            let __esrc_ext_store = ($store).clone();
+            let __esrc_ext_feature_name = __EsrcExtCurrentSlice::FEATURE_NAME;
+            $starters.push(std::boxed::Box::new(move || {
+                $crate::slice_runner::start_read_model_automation(
+                    &__esrc_ext_store,
+                    __esrc_ext_project,
+                    __esrc_ext_feature_name,
                 );
             }));
         }
     };
 
-    // Parse PgViewProjector configuration
     (@parse
         starters: $starters:ident,
         slice_path: $slice_path:path,
         feature_type: PgViewProjector,
-        config: { project_start_event_store: $store:ident, setup_params: { $($params:expr),+ $(,)? } }
+        config: {
+            project_start_event_store: $store:expr,
+            setup_params: { $($params:expr),* $(,)? }
+        }
     ) => {
         {
-            // Used to fix the compiler error about 'AST fragment opacity', and enforce that the path is a path and not an expression.
-            use $slice_path as CurrentSlice;
-            let project = CurrentSlice::setup($($params),+);
-            futures::executor::block_on(project.clone().setup()).expect("Could not start PgViewProjector");
-            let store = $store.clone();
-            let feature_name = CurrentSlice::FEATURE_NAME;
-            $starters.push(Box::new(move || {
-                esrc_ext::slice_runner::start_read_model_automation(
-                    &store,
-                    project,
-                    feature_name
+            use $slice_path as __EsrcExtCurrentSlice;
+            let __esrc_ext_project = __EsrcExtCurrentSlice::setup($($params),*);
+            __esrc_ext_project
+                .clone()
+                .setup()
+                .await
+                .map_err(|__esrc_ext_error| {
+                    $crate::setup_macro::SetupError::new(
+                        concat!("PgViewProjector `", stringify!($slice_path), "`"),
+                        __esrc_ext_error,
+                    )
+                })?;
+            let __esrc_ext_store = ($store).clone();
+            let __esrc_ext_feature_name = __EsrcExtCurrentSlice::FEATURE_NAME;
+            $starters.push(std::boxed::Box::new(move || {
+                $crate::slice_runner::start_read_model_automation(
+                    &__esrc_ext_store,
+                    __esrc_ext_project,
+                    __esrc_ext_feature_name,
                 );
             }));
         }
     };
 
-    // Parse LiveProjection configuration
     (@parse
-        starters: $starters:ident,
+        starters: $_starters:ident,
         slice_path: $slice_path:path,
         feature_type: LiveProjection,
-        config: { setup_params: { $($params:expr),+ $(,)? } }
+        config: { setup_params: { $($params:expr),* $(,)? } }
     ) => {
         {
-            // Used to fix the compiler error about 'AST fragment opacity', and enforce that the path is a path and not an expression.
-            use $slice_path as CurrentSlice;
-            CurrentSlice::setup($($params),+);
+            use $slice_path as __EsrcExtCurrentSlice;
+            __EsrcExtCurrentSlice::setup($($params),*);
         }
     };
 
-    // Parse Query configuration
+    (@parse
+        starters: $_starters:ident,
+        slice_path: $slice_path:path,
+        feature_type: Query,
+        config: { setup_params: { $($params:expr),* $(,)? } }
+    ) => {
+        {
+            use $slice_path as __EsrcExtCurrentSlice;
+            __EsrcExtCurrentSlice::setup($($params),*);
+        }
+    };
+
     (@parse
         starters: $starters:ident,
         slice_path: $slice_path:path,
-        feature_type: Query,
-        config: { setup_params: { $($params:expr),+ $(,)? } }
+        feature_type: $feature_type:ident,
+        config: { $($config:tt)* }
     ) => {
-        {
-            // Used to fix the compiler error about 'AST fragment opacity', and enforce that the path is a path and not an expression.
-            use $slice_path as CurrentSlice;
-            CurrentSlice::setup($($params),+);
-        }
+        compile_error!(concat!(
+            "invalid setup_slices! configuration for `",
+            stringify!($slice_path),
+            "` (slice type `",
+            stringify!($feature_type),
+            "`)"
+        ));
     };
 }
 
@@ -459,10 +553,63 @@ macro_rules! create_registry_and_bus {
 }
 #[cfg(test)]
 mod tests {
-    /// Note: These are compile-time tests to ensure the macros expand correctly.
-    /// They won't execute but will fail to compile if the macro syntax is broken.
-    #[allow(dead_code)]
-    fn test_macro_compilation() {
-        // This function exists only to verify macro syntax at compile time
+    use std::error::Error as _;
+
+    mod first_slice {
+        pub fn setup(order: &mut Vec<&'static str>) {
+            order.push("first");
+        }
+    }
+
+    mod second_slice {
+        pub fn setup(order: &mut Vec<&'static str>) {
+            order.push("second");
+        }
+    }
+
+    mod parameterless_slice {
+        pub fn setup() {}
+    }
+
+    #[test]
+    fn setup_slices_runs_setup_in_declaration_order() {
+        let mut order = Vec::new();
+
+        crate::setup_slices! {
+            slices: {
+                crate::setup_macro::tests::first_slice => (
+                    Feature,
+                    setup_params: { &mut order }
+                ),
+                crate::setup_macro::tests::second_slice => (
+                    Query,
+                    setup_params: { &mut order }
+                ),
+                crate::setup_macro::tests::parameterless_slice => (
+                    LiveProjection,
+                    setup_params: {}
+                ),
+            }
+        }
+
+        assert_eq!(order, ["first", "second"]);
+    }
+
+    #[test]
+    fn setup_error_preserves_context_and_source() {
+        let error = super::SetupError::new(
+            "PgViewProjector `users`",
+            std::io::Error::other("database unavailable"),
+        );
+
+        assert_eq!(error.component(), "PgViewProjector `users`");
+        assert_eq!(
+            error.to_string(),
+            "failed to initialize PgViewProjector `users`: database unavailable"
+        );
+        assert_eq!(
+            error.source().map(ToString::to_string).as_deref(),
+            Some("database unavailable")
+        );
     }
 }
