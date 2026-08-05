@@ -576,7 +576,7 @@ dependencies = [
 [[package]]
 name = "esrc"
 version = "0.4.0"
-source = "git+https://github.com/eloback/esrc.git#91b354779f1457ecbc60d875262c1f54704cd68e"
+source = "git+https://github.com/eloback/esrc.git#6604defc914ac0e8a694f4dff9bce1894e1f814c"
 dependencies = [
  "async-nats 0.50.0",
  "esrc-derive",
@@ -598,7 +598,7 @@ dependencies = [
 [[package]]
 name = "esrc-derive"
 version = "0.1.0"
-source = "git+https://github.com/eloback/esrc.git#91b354779f1457ecbc60d875262c1f54704cd68e"
+source = "git+https://github.com/eloback/esrc.git#6604defc914ac0e8a694f4dff9bce1894e1f814c"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -1453,7 +1453,7 @@ dependencies = [
 [[package]]
 name = "opentelemetry-nats"
 version = "0.2.1"
-source = "git+https://github.com/eloback/esrc.git#91b354779f1457ecbc60d875262c1f54704cd68e"
+source = "git+https://github.com/eloback/esrc.git#6604defc914ac0e8a694f4dff9bce1894e1f814c"
 dependencies = [
  "async-nats 0.50.0",
  "opentelemetry",
