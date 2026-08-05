@@ -608,7 +608,7 @@ dependencies = [
 
 [[package]]
 name = "esrc-ext"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-nats 0.46.0",
  "axum",
