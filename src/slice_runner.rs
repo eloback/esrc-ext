@@ -43,14 +43,21 @@ pub fn start_read_model_automation_with_version<A>(
 {
     let store = store.clone();
     store.get_task_tracker().spawn(async move {
-        store
+        if let Err(error) = store
             .start_view_automation_with_identity(
                 project,
                 feature_name,
                 ViewProjectorIdentity::new(feature_name, projector_version),
             )
             .await
-            .expect("automation should be able to start");
+        {
+            tracing::error!(
+                feature_name,
+                projector_version,
+                error = ?error,
+                "read-model automation stopped"
+            );
+        }
     });
 }
 
