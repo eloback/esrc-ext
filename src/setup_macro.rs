@@ -105,7 +105,7 @@ impl SetupError {
 /// ```ignore
 /// views::user_repository => (ReadModelRepository,
 ///     project_start_event_store: operacoes,
-///     projector_version: 1, // Optional; defaults to 1
+///     projector_version: 1, // Optional compatibility guard; defaults to 1
 ///     setup_params: { view_db }
 /// )
 /// ```
@@ -116,7 +116,7 @@ impl SetupError {
 /// ```ignore
 /// views::customer_projection => (PgViewProjector,
 ///     project_start_event_store: operacoes,
-///     projector_version: 1, // Optional; defaults to 1
+///     projector_version: 1, // Optional compatibility guard; defaults to 1
 ///     setup_params: { view_db }
 /// )
 /// ```
@@ -197,6 +197,10 @@ impl SetupError {
 ///   and propagated to the caller.
 /// - Configurations containing a `PgViewProjector` must be invoked from an async function whose
 ///   error type can accept [`SetupError`].
+/// - Background automation errors are emitted through `tracing`. Changing `projector_version` on
+///   an existing marked durable is rejected by `esrc`; migrate or explicitly update the consumer
+///   before deploying the new version. Updating only its metadata preserves its current cursor and
+///   does not rebuild the read model.
 ///
 /// ## Performance Considerations
 ///
