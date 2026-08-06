@@ -12,3 +12,10 @@ devenv.local.nix
 
 # pre-commit
 .pre-commit-config.yaml
+
+## Jetbrains IDEs
+.idea/
+queries/
+
+# MacOS
+.DS_Store

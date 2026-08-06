@@ -1,4 +1,5 @@
-use async_nats::jetstream::Message;
+use esrc::prelude::async_nats;
+use esrc::prelude::async_nats::jetstream::Message;
 use serde::Deserialize;
 use stream_cancel::Valved;
 use tracing::instrument;

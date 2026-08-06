@@ -1,9 +1,8 @@
-use esrc::{
-    event::event_model::{Automation, ViewAutomation},
-    nats::NatsStore,
-};
+use esrc::prelude::*;
 
 use crate::translation::ExternalStore;
+
+pub const DEFAULT_READ_MODEL_PROJECTOR_VERSION: u32 = DEFAULT_VIEW_PROJECTOR_VERSION;
 
 pub fn start_automation<A>(
     store: &NatsStore,
@@ -11,7 +10,7 @@ pub fn start_automation<A>(
     feature_name: &'static str,
     max_concurrency: impl Into<Option<usize>> + Send + 'static,
 ) where
-    A: esrc::project::Project + 'static,
+    A: Project + 'static,
 {
     let store = store.clone();
     store.get_task_tracker().spawn(async move {
@@ -24,14 +23,41 @@ pub fn start_automation<A>(
 
 pub fn start_read_model_automation<A>(store: &NatsStore, project: A, feature_name: &'static str)
 where
-    A: esrc::project::Project + 'static,
+    A: Project + 'static,
+{
+    start_read_model_automation_with_version(
+        store,
+        project,
+        feature_name,
+        DEFAULT_READ_MODEL_PROJECTOR_VERSION,
+    );
+}
+
+pub fn start_read_model_automation_with_version<A>(
+    store: &NatsStore,
+    project: A,
+    feature_name: &'static str,
+    projector_version: u32,
+) where
+    A: Project + 'static,
 {
     let store = store.clone();
     store.get_task_tracker().spawn(async move {
-        store
-            .start_view_automation(project, feature_name)
+        if let Err(error) = store
+            .start_view_automation_with_identity(
+                project,
+                feature_name,
+                ViewProjectorIdentity::new(feature_name, projector_version),
+            )
             .await
-            .expect("automation should be able to start");
+        {
+            tracing::error!(
+                feature_name,
+                projector_version,
+                error = ?error,
+                "read-model automation stopped"
+            );
+        }
     });
 }
 

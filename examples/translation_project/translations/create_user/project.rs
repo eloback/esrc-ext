@@ -1,4 +1,4 @@
-use esrc::event::{Publish, ReplayOne};
+use esrc::prelude::*;
 use esrc_ext::translation::TranslationProject;
 
 use super::*;
@@ -6,7 +6,7 @@ use super::*;
 #[derive(Debug, thiserror::Error)]
 pub enum UserErrors {
     #[error(transparent)]
-    EventStore(#[from] esrc::Error),
+    EventStore(#[from] Error),
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
 }
