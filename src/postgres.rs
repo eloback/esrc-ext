@@ -25,6 +25,10 @@ impl<V: View> PgViewProjector<V> {
         &self.db
     }
 
+    /// Create the view table and add projection checkpoints to an existing table.
+    ///
+    /// Existing rows receive a null checkpoint. Run this migration while projectors are stopped so
+    /// a historical redelivery cannot be applied to an already-materialized legacy row.
     pub async fn setup(self) -> Result<()> {
         let mut transaction = self.db.begin().await?;
         self.lock(&mut transaction).await?;
@@ -81,6 +85,10 @@ impl<V: View> PgViewProjector<V> {
         Ok(())
     }
 
+    /// Delete a view together with its projection checkpoint.
+    ///
+    /// A pending or redelivered event can recreate the row. Stop or otherwise coordinate the
+    /// durable consumer when deletion is intended to remain permanent.
     pub async fn delete_one(&self, id: Uuid) -> Result<()> {
         let mut transaction = self.db.begin().await?;
         self.lock(&mut transaction).await?;
@@ -165,6 +173,11 @@ impl<V: View> PgViewProjector<V> {
         Ok(())
     }
 
+    /// Rebuild one view from an ordered stream of events for the same aggregate.
+    ///
+    /// Sequence numbers need only be strictly increasing: a view can subscribe to a subset of an
+    /// aggregate's event types, so gaps are valid. Coordinate replay with the NATS durable because
+    /// rebuilding this row does not move the consumer cursor.
     pub async fn replay<'de, E>(
         &self,
         id: Uuid,
