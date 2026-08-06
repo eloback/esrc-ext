@@ -55,7 +55,7 @@ impl View for CombinedView {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-#[ignore = "requires isolated NATS and PostgreSQL services plus the local esrc Cargo patch"]
+#[ignore = "requires isolated NATS and PostgreSQL services"]
 async fn two_clients_project_postgres_sequentially_through_failure_and_recovery(
 ) -> Result<(), Box<dyn std::error::Error>> {
     APPLY_ATTEMPTS.store(0, Ordering::SeqCst);
