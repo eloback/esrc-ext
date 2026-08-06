@@ -105,6 +105,7 @@ impl SetupError {
 /// ```ignore
 /// views::user_repository => (ReadModelRepository,
 ///     project_start_event_store: operacoes,
+///     projector_version: 1, // Optional; defaults to 1
 ///     setup_params: { view_db }
 /// )
 /// ```
@@ -115,6 +116,7 @@ impl SetupError {
 /// ```ignore
 /// views::customer_projection => (PgViewProjector,
 ///     project_start_event_store: operacoes,
+///     projector_version: 1, // Optional; defaults to 1
 ///     setup_params: { view_db }
 /// )
 /// ```
@@ -341,6 +343,7 @@ macro_rules! setup_slices {
         feature_type: ReadModelRepository,
         config: {
             project_start_event_store: $store:expr,
+            projector_version: $projector_version:expr,
             setup_params: { $($params:expr),* $(,)? }
         }
     ) => {
@@ -349,11 +352,13 @@ macro_rules! setup_slices {
             let __esrc_ext_project = __EsrcExtCurrentSlice::setup($($params),*);
             let __esrc_ext_store = ($store).clone();
             let __esrc_ext_feature_name = __EsrcExtCurrentSlice::FEATURE_NAME;
+            let __esrc_ext_projector_version = $projector_version;
             $starters.push(std::boxed::Box::new(move || {
-                $crate::slice_runner::start_read_model_automation(
+                $crate::slice_runner::start_read_model_automation_with_version(
                     &__esrc_ext_store,
                     __esrc_ext_project,
                     __esrc_ext_feature_name,
+                    __esrc_ext_projector_version,
                 );
             }));
         }
@@ -362,9 +367,31 @@ macro_rules! setup_slices {
     (@parse
         starters: $starters:ident,
         slice_path: $slice_path:path,
+        feature_type: ReadModelRepository,
+        config: {
+            project_start_event_store: $store:expr,
+            setup_params: { $($params:expr),* $(,)? }
+        }
+    ) => {
+        $crate::setup_slices!(@parse
+            starters: $starters,
+            slice_path: $slice_path,
+            feature_type: ReadModelRepository,
+            config: {
+                project_start_event_store: $store,
+                projector_version: $crate::slice_runner::DEFAULT_READ_MODEL_PROJECTOR_VERSION,
+                setup_params: { $($params),* }
+            }
+        )
+    };
+
+    (@parse
+        starters: $starters:ident,
+        slice_path: $slice_path:path,
         feature_type: PgViewProjector,
         config: {
             project_start_event_store: $store:expr,
+            projector_version: $projector_version:expr,
             setup_params: { $($params:expr),* $(,)? }
         }
     ) => {
@@ -383,14 +410,37 @@ macro_rules! setup_slices {
                 })?;
             let __esrc_ext_store = ($store).clone();
             let __esrc_ext_feature_name = __EsrcExtCurrentSlice::FEATURE_NAME;
+            let __esrc_ext_projector_version = $projector_version;
             $starters.push(std::boxed::Box::new(move || {
-                $crate::slice_runner::start_read_model_automation(
+                $crate::slice_runner::start_read_model_automation_with_version(
                     &__esrc_ext_store,
                     __esrc_ext_project,
                     __esrc_ext_feature_name,
+                    __esrc_ext_projector_version,
                 );
             }));
         }
+    };
+
+    (@parse
+        starters: $starters:ident,
+        slice_path: $slice_path:path,
+        feature_type: PgViewProjector,
+        config: {
+            project_start_event_store: $store:expr,
+            setup_params: { $($params:expr),* $(,)? }
+        }
+    ) => {
+        $crate::setup_slices!(@parse
+            starters: $starters,
+            slice_path: $slice_path,
+            feature_type: PgViewProjector,
+            config: {
+                project_start_event_store: $store,
+                projector_version: $crate::slice_runner::DEFAULT_READ_MODEL_PROJECTOR_VERSION,
+                setup_params: { $($params),* }
+            }
+        )
     };
 
     (@parse
