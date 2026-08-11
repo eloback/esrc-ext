@@ -255,7 +255,9 @@ impl<V: View + Sync + Send> Project for PgViewProjector<V> {
         let mut rm = loaded.map(|(view, _)| view).unwrap_or_default();
         let changed = rm.apply(context);
         if !changed {
-            tracing::debug!("view not changed, saving checkpoint with current payload");
+            transaction.commit().await?;
+            tracing::debug!(sequence, "view not changed, skipping persistence");
+            return Ok(());
         }
         self.save_projected_in_transaction(&mut transaction, *id, &rm, Some(sequence))
             .await?;

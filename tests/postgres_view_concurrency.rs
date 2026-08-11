@@ -159,7 +159,7 @@ async fn setup_migrates_an_existing_payload_table_without_losing_rows(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires DATABASE_URL for an isolated PostgreSQL database"]
-async fn unchanged_first_event_stores_default_payload_and_checkpoint(
+async fn unchanged_first_event_does_not_create_view_or_checkpoint(
 ) -> Result<(), Box<dyn std::error::Error>> {
     reset_probes();
     let (pool, table, mut projector) = setup_projector().await?;
@@ -168,19 +168,16 @@ async fn unchanged_first_event_stores_default_payload_and_checkpoint(
     let context = Context::try_with_envelope(&envelope)?;
     projector.project(context).await?;
 
-    let view = projector
-        .load(id)
-        .await?
-        .expect("checkpoint row should exist");
+    let view = projector.load(id).await?;
     let committed_checkpoint = checkpoint(&pool, &table, id).await?;
     println!(
-        "unchanged_event_default_total={} checkpoint={}",
-        view.total,
-        committed_checkpoint.unwrap_or_default()
+        "unchanged_event_view_exists={} checkpoint_exists={}",
+        view.is_some(),
+        committed_checkpoint.is_some()
     );
     cleanup(&pool, &table).await?;
-    assert_eq!(view.total, 0);
-    assert_eq!(committed_checkpoint, Some(1));
+    assert!(view.is_none());
+    assert_eq!(committed_checkpoint, None);
     Ok(())
 }
 
